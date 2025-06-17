@@ -289,41 +289,6 @@ async function clickLoginButton(driver) {
   }
 }
 
-// Fungsi untuk mengambil data dari extension
-async function getExtensionData(driver) {
-  try {
-    console.log("-> Mengambil data dari extension...");
-    
-    // Buka extension
-    await openExtensionPage(driver);
-    
-    // Tunggu beberapa detik agar extension dimuat dengan sempurna
-    await driver.sleep(3000);
-    
-    // Coba ambil data dari selector yang ditentukan
-    const selector = "#root-gradient-extension-popup-20240807 > div > div:nth-child(1) > div.relative.flex.flex-row.items-center.space-x-4 > div:nth-child(3) > div.absolute.mt-3.right-0.z-10 > div > div.flex.flex-row.items-center.ml-1\\.5 > span";
-    
-    try {
-      // Tunggu elemen muncul
-      await driver.wait(until.elementLocated(By.css(selector)), 10000);
-      
-      // Ambil teks dari elemen
-      const element = await driver.findElement(By.css(selector));
-      const text = await element.getText();
-      
-      console.log(`-> Data yang diambil dari extension: ${text}`);
-      return text;
-    } catch (error) {
-      console.log(`-> Tidak bisa menemukan elemen dengan selector: ${selector}`);
-      console.log(`-> Error: ${error.message}`);
-      return null;
-    }
-  } catch (error) {
-    console.error(`-> Error saat mengambil data dari extension: ${error.message}`);
-    return null;
-  }
-}
-
 // Fungsi untuk setup browser
 async function setupBrowser(customProxy) {
   try {
@@ -418,6 +383,68 @@ async function setupBrowser(customProxy) {
   }
 }
 
+// Fungsi untuk memeriksa status di ekstensi
+async function checkExtensionStatus(driver) {
+  try {
+    console.log("-> Checking extension status...");
+    
+    // Pastikan kita berada di tab ekstensi
+    await openExtensionPage(driver);
+    
+    // Tunggu sejenak untuk memastikan konten ekstensi dimuat
+    await driver.sleep(3000);
+    
+    // Cari status (span yang berisi "Unsupported", "Disconnected", atau "Good")
+    const statusElements = await driver.findElements(By.css("span"));
+    let statusFound = false;
+    
+    for (const element of statusElements) {
+      try {
+        const text = await element.getText();
+        if (["Unsupported", "Disconnected", "Good"].includes(text)) {
+          const statusText = text;
+          const statusClass = await element.getAttribute("class");
+          console.log(`-> Status ditemukan: ${statusText} (Class: ${statusClass})`);
+          
+          // Tambahkan emoji untuk memudahkan melihat status
+          let emoji = "❓";
+          if (statusText === "Good") emoji = "✅";
+          if (statusText === "Disconnected") emoji = "❌";
+          if (statusText === "Unsupported") emoji = "⚠️";
+          
+          console.log(`-> Status Ekstensi ${emoji}: ${statusText}`);
+          statusFound = true;
+          
+          // Tambahkan tindakan berdasarkan status jika diperlukan
+          if (statusText === "Disconnected") {
+            console.log("-> Mencoba mengklik tombol login karena status Disconnected...");
+            await clickLoginButton(driver);
+          }
+          
+          break;
+        }
+      } catch (elementError) {
+        // Lewati elemen yang tidak dapat diakses
+        continue;
+      }
+    }
+    
+    if (!statusFound) {
+      console.log("-> Status tidak ditemukan di ekstensi 🔍");
+      
+      // Coba ambil screenshot jika tidak menemukan status
+      if (ALLOW_DEBUG) {
+        await takeScreenshot(driver, "extension_status_not_found.png");
+      }
+    }
+    
+    return statusFound;
+  } catch (error) {
+    console.error(`-> Error saat memeriksa status ekstensi: ${error.message} ⚠️`);
+    return false;
+  }
+}
+
 async function main(proxy) {
   let driver = null;
   
@@ -435,53 +462,49 @@ async function main(proxy) {
     
     await driver.sleep(5000);
 
-    console.log("-> Navigating to dashboard...");
+    console.log("-> Membuka dashboard... 🖥️");
     await driver.get("https://app.gradient.network/dashboard");
     await driver.wait(until.elementLocated(By.css('body')), 30000);
-    console.log("-> Dashboard page is open.");
+    console.log("-> Dashboard terbuka dengan sukses! ✅");
 
-    console.log("-> Opening extension in a new tab...");
+    console.log("-> Membuka ekstensi di tab baru... 🧩");
     await driver.switchTo().newWindow('tab');
     await openExtensionPage(driver);
-    console.log("-> Extension is open in a new tab.");
+    console.log("-> Ekstensi terbuka di tab baru! ✅");
 
     const handles = await driver.getAllWindowHandles();
     const dashboardHandle = handles[0];
     const extensionHandle = handles[1];
 
-    console.log("-> Bot is now running with data collection every 2 minutes.");
+    console.log("-> Bot berjalan dengan tab dashboard dan ekstensi terbuka 🤖");
     
     let lastRefreshTime = Date.now();
-    let lastDataCollectionTime = 0;
+    let lastCheckStatusTime = Date.now();
     
     while (true) {
-      await driver.sleep(10000); // Check every 10 seconds
+      await driver.sleep(10000); // Cek setiap 10 detik
 
       const currentTime = Date.now();
       
-      // Collect data every 2 minutes
-      if (currentTime - lastDataCollectionTime >= 2 * 60 * 1000) {
+      // Periksa status ekstensi setiap 2 menit
+      if (currentTime - lastCheckStatusTime > 2 * 60 * 1000) {
         try {
-          console.log("-> Waktu untuk mengambil data dari extension...");
+          console.log("-> Saatnya memeriksa status ekstensi (interval 2 menit) 🕒");
           
-          // Pindah ke tab extension
           await driver.switchTo().window(extensionHandle);
+          await openExtensionPage(driver); // Buka ulang ekstensi
+          await checkExtensionStatus(driver);
           
-          // Buka/refresh extension dan ambil data
-          const data = await getExtensionData(driver);
-          
-          console.log(`-> [${new Date().toLocaleString()}] Data dari extension: ${data || "Tidak dapat mengambil data"}`);
-          
-          lastDataCollectionTime = currentTime;
-        } catch (dataError) {
-          console.error("-> Gagal mengambil data dari extension:", dataError.message);
+          lastCheckStatusTime = currentTime;
+        } catch (statusError) {
+          console.error(`-> Gagal memeriksa status ekstensi: ${statusError.message} ❌`);
         }
       }
-
-      // Refresh pages every 3 hours to keep sessions alive
+      
+      // Refresh halaman setiap 3 jam untuk menjaga sesi tetap aktif
       if (currentTime - lastRefreshTime > 3 * 60 * 60 * 1000) {
         try {
-          console.log("-> Refreshing pages to keep sessions alive...");
+          console.log("-> Menyegarkan halaman untuk menjaga sesi tetap aktif... 🔄");
           
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
@@ -489,20 +512,20 @@ async function main(proxy) {
           await driver.switchTo().window(extensionHandle);
           await driver.navigate().refresh();
 
-          console.log("-> Pages refreshed successfully.");
+          console.log("-> Halaman berhasil disegarkan! ✅");
           lastRefreshTime = currentTime;
         } catch (refreshError) {
-          console.error("-> Failed to refresh pages:", refreshError.message);
+          console.error(`-> Gagal menyegarkan halaman: ${refreshError.message} ❌`);
         }
       }
     }
   } catch (error) {
-    console.error(`-> Error in main function: ${error.message}`);
+    console.error(`-> Error dalam fungsi main: ${error.message} ❌`);
     if (ALLOW_DEBUG && driver) {
       await generateErrorReport(driver);
     }
     
-    console.log("-> Attempting to keep the browser running despite the error...");
+    console.log("-> Mencoba mempertahankan browser tetap berjalan meskipun terjadi error... 🛠️");
     try {
       if (driver) {
         while (true) {
@@ -510,7 +533,7 @@ async function main(proxy) {
         }
       }
     } catch (keepAliveError) {
-      console.error("-> Failed to keep browser alive after error:", keepAliveError.message);
+      console.error(`-> Gagal menjaga browser tetap hidup setelah error: ${keepAliveError.message} ❌`);
     }
   }
 }
