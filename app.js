@@ -908,37 +908,91 @@ async function main(proxy) {
     // Tunggu 2 detik
     await driver.sleep(2000);
     
-    // Cek apakah halaman login muncul
+    // Cek apakah halaman login muncul dan login menggunakan XPath yang diberikan
     try {
-      const emailInput = By.css('[placeholder="Enter Email"]');
-      const passwordInput = By.css('[type="password"]');
-      const loginButton = By.css("button");
-
-      await driver.wait(until.elementLocated(emailInput), 30000);
-      await driver.wait(until.elementLocated(passwordInput), 30000);
-      await driver.wait(until.elementLocated(loginButton), 30000);
-
-      // Tunggu 2 detik
-      await driver.sleep(2000);
-
-      await driver.findElement(emailInput).sendKeys(USER);
+      console.log("-> Mencoba login menggunakan XPath yang diberikan...");
+      
+      // XPath untuk input email, password, dan tombol login
+      const emailInputXPath = '/html/body/div/div[2]/div/div/div/div[2]/div[1]/input';
+      const passwordInputXPath = '/html/body/div/div[2]/div/div/div/div[2]/div[2]/span/input';
+      const loginButtonXPath = '/html/body/div/div[2]/div/div/div/div[4]/button[1]';
+      
+      // Tunggu elemen-elemen muncul
+      await driver.wait(until.elementLocated(By.xpath(emailInputXPath)), 30000);
+      await driver.wait(until.elementLocated(By.xpath(passwordInputXPath)), 30000);
+      await driver.wait(until.elementLocated(By.xpath(loginButtonXPath)), 30000);
+      
+      // Ambil screenshot sebelum login
+      await takeScreenshot(driver, "before-login-app.png");
       
       // Tunggu 2 detik
       await driver.sleep(2000);
       
-      await driver.findElement(passwordInput).sendKeys(PASSWORD);
+      // Input email
+      await driver.findElement(By.xpath(emailInputXPath)).clear();
+      await driver.findElement(By.xpath(emailInputXPath)).sendKeys(USER);
+      console.log("-> Email berhasil dimasukkan");
       
       // Tunggu 2 detik
       await driver.sleep(2000);
       
-      await driver.findElement(loginButton).click();
-      
-      console.log("-> Login form submitted successfully");
+      // Input password
+      await driver.findElement(By.xpath(passwordInputXPath)).clear();
+      await driver.findElement(By.xpath(passwordInputXPath)).sendKeys(PASSWORD);
+      console.log("-> Password berhasil dimasukkan");
       
       // Tunggu 2 detik
       await driver.sleep(2000);
+      
+      // Klik tombol login
+      await driver.findElement(By.xpath(loginButtonXPath)).click();
+      console.log("-> Tombol login berhasil diklik");
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
+      // Ambil screenshot setelah login
+      const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app.png");
+      if (SEND_SCREENSHOT_TO_TELEGRAM && afterLoginScreenshotPath) {
+        await sendToTelegram(afterLoginScreenshotPath, "🔑 Login berhasil ke app.gradient.network");
+      }
+      
     } catch (loginError) {
-      console.log("-> Could not find login form, checking if already logged in...");
+      console.log("-> Error saat login menggunakan XPath:", loginError.message);
+      console.log("-> Mencoba metode login alternatif...");
+      
+      // Metode login alternatif menggunakan CSS selector
+      try {
+        const emailInput = By.css('[placeholder="Enter Email"]');
+        const passwordInput = By.css('[type="password"]');
+        const loginButton = By.css("button");
+
+        await driver.wait(until.elementLocated(emailInput), 30000);
+        await driver.wait(until.elementLocated(passwordInput), 30000);
+        await driver.wait(until.elementLocated(loginButton), 30000);
+
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+
+        await driver.findElement(emailInput).sendKeys(USER);
+        
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+        
+        await driver.findElement(passwordInput).sendKeys(PASSWORD);
+        
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+        
+        await driver.findElement(loginButton).click();
+        
+        console.log("-> Login form submitted successfully using alternative method");
+        
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+      } catch (altLoginError) {
+        console.log("-> Could not find login form, checking if already logged in...");
+      }
     }
     
     // Pastikan sudah login dengan mengakses halaman dashboard
@@ -972,6 +1026,15 @@ async function main(proxy) {
     // Tunggu 2 detik
     await driver.sleep(2000);
     
+    // Ambil screenshot extension sebelum login
+    const beforeExtLoginScreenshotPath = await takeScreenshot(driver, "extension-before-login.png");
+    if (SEND_SCREENSHOT_TO_TELEGRAM && beforeExtLoginScreenshotPath) {
+      await sendToTelegram(beforeExtLoginScreenshotPath, "🔍 Extension Gradient Network sebelum login");
+    }
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
     // Coba klik tombol "I got it" jika ada
     await clickIGotItButton(driver);
     
@@ -984,10 +1047,23 @@ async function main(proxy) {
     // Tunggu 2 detik
     await driver.sleep(2000);
     
-    // Ambil screenshot extension sebelum klik tombol
-    const beforeClickScreenshotPath = await takeScreenshot(driver, "extension-before-click.png");
-    if (SEND_SCREENSHOT_TO_TELEGRAM && beforeClickScreenshotPath) {
-      await sendToTelegram(beforeClickScreenshotPath, "🔍 Extension Gradient Network sebelum klik tombol spesifik");
+    // Coba klik tombol login pada extension
+    console.log("-> Mencoba klik tombol login di extension...");
+    const loginSuccess = await clickLoginButton(driver);
+    
+    if (loginSuccess) {
+      console.log("-> Berhasil mengklik tombol login di extension!");
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
+      // Ambil screenshot setelah klik tombol login
+      const afterExtLoginScreenshotPath = await takeScreenshot(driver, "extension-after-login-click.png");
+      if (SEND_SCREENSHOT_TO_TELEGRAM && afterExtLoginScreenshotPath) {
+        await sendToTelegram(afterExtLoginScreenshotPath, "🔐 Tombol login berhasil diklik pada extension Gradient Network");
+      }
+    } else {
+      console.log("-> Gagal mengklik tombol login di extension, akan tetap melanjutkan proses...");
     }
     
     // Tunggu 2 detik
