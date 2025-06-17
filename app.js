@@ -289,61 +289,37 @@ async function clickLoginButton(driver) {
   }
 }
 
-// Fungsi untuk mengambil data dari elemen XPath spesifik dalam ekstensi
-async function getDataFromExtension(driver) {
+// Fungsi untuk mengambil data dari extension
+async function getExtensionData(driver) {
   try {
-    console.log("-> Mencoba mengambil data dari ekstensi...");
-    const xpath = "/html/body/div[1]/div/div[1]/div[2]/div[3]/div[2]/div/div[2]/span";
+    console.log("-> Mengambil data dari extension...");
+    
+    // Buka extension
+    await openExtensionPage(driver);
+    
+    // Tunggu beberapa detik agar extension dimuat dengan sempurna
+    await driver.sleep(3000);
+    
+    // Coba ambil data dari selector yang ditentukan
+    const selector = "#root-gradient-extension-popup-20240807 > div > div:nth-child(1) > div.relative.flex.flex-row.items-center.space-x-4 > div:nth-child(3) > div.absolute.mt-3.right-0.z-10 > div > div.flex.flex-row.items-center.ml-1\\.5 > span";
     
     try {
-      // Tunggu sampai elemen dengan XPath tersedia
-      await driver.wait(until.elementLocated(By.xpath(xpath)), 15000);
+      // Tunggu elemen muncul
+      await driver.wait(until.elementLocated(By.css(selector)), 10000);
       
       // Ambil teks dari elemen
-      const element = await driver.findElement(By.xpath(xpath));
+      const element = await driver.findElement(By.css(selector));
       const text = await element.getText();
       
-      console.log(`-> Data berhasil diambil: "${text}"`);
+      console.log(`-> Data yang diambil dari extension: ${text}`);
       return text;
     } catch (error) {
-      console.log(`-> Tidak dapat menemukan elemen dengan XPath: ${xpath}`);
+      console.log(`-> Tidak bisa menemukan elemen dengan selector: ${selector}`);
       console.log(`-> Error: ${error.message}`);
       return null;
     }
   } catch (error) {
-    console.error(`-> Error dalam getDataFromExtension: ${error.message}`);
-    return null;
-  }
-}
-
-// Fungsi untuk refresh ekstensi dan mengambil data
-async function refreshExtensionAndGetData(driver, extensionHandle) {
-  try {
-    console.log("-> Membuka ekstensi untuk mengambil data baru...");
-    
-    // Beralih ke tab ekstensi
-    await driver.switchTo().window(extensionHandle);
-    
-    // Muat ulang halaman ekstensi
-    await openExtensionPage(driver);
-    
-    // Tunggu konten dimuat
-    await driver.sleep(3000);
-    
-    // Ambil data dari XPath yang ditentukan
-    const data = await getDataFromExtension(driver);
-    
-    // Jika data berhasil diambil, simpan ke dalam file log
-    if (data) {
-      const timestamp = new Date().toISOString();
-      const logEntry = `${timestamp}: ${data}\n`;
-      fs.appendFileSync('extension_data.log', logEntry);
-      console.log("-> Data berhasil disimpan ke dalam file log");
-    }
-    
-    return data;
-  } catch (error) {
-    console.error(`-> Error dalam refreshExtensionAndGetData: ${error.message}`);
+    console.error(`-> Error saat mengambil data dari extension: ${error.message}`);
     return null;
   }
 }
@@ -473,38 +449,47 @@ async function main(proxy) {
     const dashboardHandle = handles[0];
     const extensionHandle = handles[1];
 
-    // Ambil data awal dari ekstensi
-    await refreshExtensionAndGetData(driver, extensionHandle);
-
-    console.log("-> Bot akan membuka ekstensi setiap 2 menit dan mengambil data...");
+    console.log("-> Bot is now running with data collection every 2 minutes.");
     
     let lastRefreshTime = Date.now();
-    let lastExtensionCheckTime = Date.now();
+    let lastDataCollectionTime = 0;
     
     while (true) {
-      await driver.sleep(10000); // Sleep 10 detik untuk mengurangi beban CPU
+      await driver.sleep(10000); // Check every 10 seconds
+
       const currentTime = Date.now();
       
-      // Refresh ekstensi dan ambil data setiap 2 menit
-      if (currentTime - lastExtensionCheckTime > 2 * 60 * 1000) {
+      // Collect data every 2 minutes
+      if (currentTime - lastDataCollectionTime >= 2 * 60 * 1000) {
         try {
-          await refreshExtensionAndGetData(driver, extensionHandle);
-          lastExtensionCheckTime = currentTime;
-        } catch (extensionError) {
-          console.error("-> Error saat mengambil data dari ekstensi:", extensionError.message);
+          console.log("-> Waktu untuk mengambil data dari extension...");
+          
+          // Pindah ke tab extension
+          await driver.switchTo().window(extensionHandle);
+          
+          // Buka/refresh extension dan ambil data
+          const data = await getExtensionData(driver);
+          
+          console.log(`-> [${new Date().toLocaleString()}] Data dari extension: ${data || "Tidak dapat mengambil data"}`);
+          
+          lastDataCollectionTime = currentTime;
+        } catch (dataError) {
+          console.error("-> Gagal mengambil data dari extension:", dataError.message);
         }
       }
 
-      // Refresh halaman setiap 3 jam untuk menjaga session tetap aktif
+      // Refresh pages every 3 hours to keep sessions alive
       if (currentTime - lastRefreshTime > 3 * 60 * 60 * 1000) {
         try {
-          console.log("-> Refreshing main pages to keep sessions alive...");
+          console.log("-> Refreshing pages to keep sessions alive...");
           
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
-          await driver.sleep(5000);
           
-          console.log("-> Dashboard refreshed successfully.");
+          await driver.switchTo().window(extensionHandle);
+          await driver.navigate().refresh();
+
+          console.log("-> Pages refreshed successfully.");
           lastRefreshTime = currentTime;
         } catch (refreshError) {
           console.error("-> Failed to refresh pages:", refreshError.message);
