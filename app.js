@@ -29,7 +29,7 @@ const PROXY = process.env.PROXY || undefined
 const TELEGRAM_BOT_TOKEN = "7781646205:AAGm-JZbvv8-LXW5Ol-h4QcFdGOGzxyQHi0"
 let TELEGRAM_CHAT_ID = ""
 const SEND_SCREENSHOT_TO_TELEGRAM = true
-const SCREENSHOT_INTERVAL_MINUTES = 120 // Setiap 2 jam
+const SCREENSHOT_INTERVAL_MINUTES = 5 // Diubah dari 120 menjadi 5 menit
 
 console.log("-> Starting...")
 console.log("-> User:", USER)
@@ -313,16 +313,45 @@ async function clickLoginButton(driver) {
   try {
     console.log("-> Trying to click login button in extension...");
     
-    // Coba dengan selector kompleks yang diberikan
-    const loginButtonSelector = "#root-gradient-extension-popup-20240807 > div > div > div > div.mt-\\[50px\\].h-\\[48px\\].w-full.rounded-\\[125px\\].bg-\\[\\#FFFFFF\\].px-\\[32px\\].py-\\[7\\.5px\\].flex.justify-center.items-center.select-none.text-\\[16px\\].cursor-pointer";
-    
+    // Coba dengan mencari teks "Log in" terlebih dahulu
     try {
-      // Tunggu tombol login muncul
-      await driver.wait(until.elementLocated(By.css(loginButtonSelector)), 15000);
+      // Tunggu beberapa saat agar halaman dimuat dengan baik
+      await driver.sleep(5000);
       
-      // Klik tombol login
+      // Gunakan JavaScript executor untuk mencari elemen dengan teks "Log in"
+      const loginElement = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("*")).find(el => 
+          el.textContent.trim() === "Log in" && 
+          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON")
+        );
+      `);
+      
+      if (loginElement) {
+        await driver.executeScript("arguments[0].click();", loginElement);
+        console.log("-> Login button clicked successfully with text 'Log in'!");
+        return true;
+      }
+      
+      // Jika tidak menemukan "Log in", coba "Login"
+      const loginElement2 = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("*")).find(el => 
+          el.textContent.trim() === "Login" && 
+          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON")
+        );
+      `);
+      
+      if (loginElement2) {
+        await driver.executeScript("arguments[0].click();", loginElement2);
+        console.log("-> Login button clicked successfully with text 'Login'!");
+        return true;
+      }
+      
+      // Jika masih tidak menemukan, coba dengan selector kompleks yang diberikan
+      const loginButtonSelector = "#root-gradient-extension-popup-20240807 > div > div > div > div.mt-\\[50px\\].h-\\[48px\\].w-full.rounded-\\[125px\\].bg-\\[\\#FFFFFF\\].px-\\[32px\\].py-\\[7\\.5px\\].flex.justify-center.items-center.select-none.text-\\[16px\\].cursor-pointer";
+      
+      await driver.wait(until.elementLocated(By.css(loginButtonSelector)), 5000);
       await driver.findElement(By.css(loginButtonSelector)).click();
-      console.log("-> Login button clicked successfully!");
+      console.log("-> Login button clicked successfully with complex selector!");
       
       return true;
     } catch (error) {
@@ -330,27 +359,24 @@ async function clickLoginButton(driver) {
       
       // Coba dengan selector yang lebih sederhana
       const alternativeSelectors = [
-        "button:contains('Login')",
-        "div.cursor-pointer:contains('Login')",
+        "div.cursor-pointer",
         "div.bg-\\[\\#FFFFFF\\].cursor-pointer",
-        "div.rounded-\\[125px\\].cursor-pointer"
+        "div.rounded-\\[125px\\].cursor-pointer",
+        "button"
       ];
       
       for (const selector of alternativeSelectors) {
         try {
-          // Gunakan JavaScript executor untuk mencari elemen berdasarkan teks
-          const element = await driver.executeScript(`
-            return document.querySelector("${selector.replace(/"/g, '\\"')}") || 
-                   Array.from(document.querySelectorAll("div")).find(el => 
-                     el.textContent.includes("Login") && 
-                     (el.className.includes("cursor-pointer") || el.style.cursor === "pointer")
-                   );
-          `);
+          // Cari semua elemen yang cocok dengan selector
+          const elements = await driver.findElements(By.css(selector));
           
-          if (element) {
-            await driver.executeScript("arguments[0].click();", element);
-            console.log(`-> Login button clicked using alternative selector: ${selector}`);
-            return true;
+          for (const element of elements) {
+            const text = await element.getText();
+            if (text.includes("Log in") || text.includes("Login")) {
+              await element.click();
+              console.log(`-> Login button clicked using alternative selector: ${selector} with text: ${text}`);
+              return true;
+            }
           }
         } catch (innerError) {
           console.log(`-> Failed with selector ${selector}`);
@@ -421,10 +447,10 @@ async function setupBrowser(customProxy) {
     console.log(`-> Extension added! ${EXTENSION_FILENAME}`);
 
     // Enable debug jika diperlukan
-  if (ALLOW_DEBUG) {
+    if (ALLOW_DEBUG) {
       options.addArguments("--enable-logging");
       options.addArguments("--v=1");
-  }
+    }
 
     // Buat driver
     console.log("-> Starting browser...");
@@ -433,6 +459,16 @@ async function setupBrowser(customProxy) {
       .setChromeOptions(options)
       .build();
     console.log("-> Browser started!");
+
+    // Coba mendapatkan chat_id Telegram di awal
+    if (SEND_SCREENSHOT_TO_TELEGRAM && !TELEGRAM_CHAT_ID) {
+      TELEGRAM_CHAT_ID = await getChatId();
+      if (TELEGRAM_CHAT_ID) {
+        console.log(`-> Telegram chat_id ditemukan: ${TELEGRAM_CHAT_ID}`);
+      } else {
+        console.log("-> Telegram chat_id tidak ditemukan, silakan kirim pesan ke bot terlebih dahulu");
+      }
+    }
 
     // Periksa informasi proxy jika ada
     let proxyIpInfo = "";
@@ -528,6 +564,7 @@ async function main(proxy) {
     console.log("-> Opening extension in a new tab...");
     await driver.switchTo().newWindow('tab');
     await openExtensionPage(driver);
+    await driver.sleep(5000); // Delay 5 detik setelah membuka extension
     console.log("-> Extension is open in a new tab.");
 
     const handles = await driver.getAllWindowHandles();
@@ -540,6 +577,7 @@ async function main(proxy) {
     }
 
     console.log("-> Bot is now running indefinitely with dashboard and extension tabs open.");
+    console.log(`-> Screenshots akan dikirim setiap ${SCREENSHOT_INTERVAL_MINUTES} menit ke Telegram`);
     
     let lastRefreshTime = Date.now();
     let lastScreenshotTime = Date.now();
@@ -556,9 +594,11 @@ async function main(proxy) {
           
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
+          await driver.sleep(5000); // Delay 5 detik setelah refresh
           
           await driver.switchTo().window(extensionHandle);
           await driver.navigate().refresh();
+          await driver.sleep(5000); // Delay 5 detik setelah refresh
 
           console.log("-> Pages refreshed successfully.");
           lastRefreshTime = currentTime;
