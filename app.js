@@ -289,6 +289,65 @@ async function clickLoginButton(driver) {
   }
 }
 
+// Fungsi untuk mengambil data dari elemen XPath spesifik dalam ekstensi
+async function getDataFromExtension(driver) {
+  try {
+    console.log("-> Mencoba mengambil data dari ekstensi...");
+    const xpath = "/html/body/div[1]/div/div[1]/div[2]/div[3]/div[2]/div/div[2]/span";
+    
+    try {
+      // Tunggu sampai elemen dengan XPath tersedia
+      await driver.wait(until.elementLocated(By.xpath(xpath)), 15000);
+      
+      // Ambil teks dari elemen
+      const element = await driver.findElement(By.xpath(xpath));
+      const text = await element.getText();
+      
+      console.log(`-> Data berhasil diambil: "${text}"`);
+      return text;
+    } catch (error) {
+      console.log(`-> Tidak dapat menemukan elemen dengan XPath: ${xpath}`);
+      console.log(`-> Error: ${error.message}`);
+      return null;
+    }
+  } catch (error) {
+    console.error(`-> Error dalam getDataFromExtension: ${error.message}`);
+    return null;
+  }
+}
+
+// Fungsi untuk refresh ekstensi dan mengambil data
+async function refreshExtensionAndGetData(driver, extensionHandle) {
+  try {
+    console.log("-> Membuka ekstensi untuk mengambil data baru...");
+    
+    // Beralih ke tab ekstensi
+    await driver.switchTo().window(extensionHandle);
+    
+    // Muat ulang halaman ekstensi
+    await openExtensionPage(driver);
+    
+    // Tunggu konten dimuat
+    await driver.sleep(3000);
+    
+    // Ambil data dari XPath yang ditentukan
+    const data = await getDataFromExtension(driver);
+    
+    // Jika data berhasil diambil, simpan ke dalam file log
+    if (data) {
+      const timestamp = new Date().toISOString();
+      const logEntry = `${timestamp}: ${data}\n`;
+      fs.appendFileSync('extension_data.log', logEntry);
+      console.log("-> Data berhasil disimpan ke dalam file log");
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`-> Error dalam refreshExtensionAndGetData: ${error.message}`);
+    return null;
+  }
+}
+
 // Fungsi untuk setup browser
 async function setupBrowser(customProxy) {
   try {
@@ -414,25 +473,38 @@ async function main(proxy) {
     const dashboardHandle = handles[0];
     const extensionHandle = handles[1];
 
-    console.log("-> Bot is now running indefinitely with dashboard and extension tabs open.");
+    // Ambil data awal dari ekstensi
+    await refreshExtensionAndGetData(driver, extensionHandle);
+
+    console.log("-> Bot akan membuka ekstensi setiap 2 menit dan mengambil data...");
     
     let lastRefreshTime = Date.now();
+    let lastExtensionCheckTime = Date.now();
     
     while (true) {
-      await driver.sleep(60000);
-
+      await driver.sleep(10000); // Sleep 10 detik untuk mengurangi beban CPU
       const currentTime = Date.now();
+      
+      // Refresh ekstensi dan ambil data setiap 2 menit
+      if (currentTime - lastExtensionCheckTime > 2 * 60 * 1000) {
+        try {
+          await refreshExtensionAndGetData(driver, extensionHandle);
+          lastExtensionCheckTime = currentTime;
+        } catch (extensionError) {
+          console.error("-> Error saat mengambil data dari ekstensi:", extensionError.message);
+        }
+      }
+
+      // Refresh halaman setiap 3 jam untuk menjaga session tetap aktif
       if (currentTime - lastRefreshTime > 3 * 60 * 60 * 1000) {
         try {
-          console.log("-> Refreshing pages to keep sessions alive...");
+          console.log("-> Refreshing main pages to keep sessions alive...");
           
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
+          await driver.sleep(5000);
           
-          await driver.switchTo().window(extensionHandle);
-          await driver.navigate().refresh();
-
-          console.log("-> Pages refreshed successfully.");
+          console.log("-> Dashboard refreshed successfully.");
           lastRefreshTime = currentTime;
         } catch (refreshError) {
           console.error("-> Failed to refresh pages:", refreshError.message);
