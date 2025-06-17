@@ -20,12 +20,17 @@ RUN apt-get update -qq -y && \
         vim \
         libasound2 \
         libatk-bridge2.0-0 \
-        libgtk-4-1 \
         libnss3 \
         xdg-utils \
-        wget
+        wget \
+        dos2unix \
+        libgtk-3-0 \
+        libgbm1
 
 ADD . /app/
+
+# Fix line endings for shell scripts
+RUN find /app -type f -name "*.sh" -exec dos2unix {} \;
 
 # install dependencies
 RUN npm install --omit=dev

@@ -145,21 +145,35 @@ async function getDriverOptions() {
       proxyUrl = `http://${proxyUrl}`
     }
 
+    try {
+      // Gunakan proxyChain untuk mengakomodasi berbagai format proxy
     const newProxyUrl = await proxyChain.anonymizeProxy(proxyUrl)
-
     console.log("-> New proxy URL:", newProxyUrl)
 
+      // Ekstrak informasi dari URL proxy
+      const parsedUrl = new URL(newProxyUrl)
+      console.log("-> Proxy host:", parsedUrl.hostname)
+      console.log("-> Proxy port:", parsedUrl.port)
+      
+      // Gunakan kedua metode untuk memastikan proxy bekerja
     options.setProxy(
       proxy.manual({
         http: newProxyUrl,
         https: newProxyUrl,
-      })
-    )
-    const url = new URL(newProxyUrl)
-    console.log("-> Proxy host:", url.hostname)
-    console.log("-> Proxy port:", url.port)
-    options.addArguments(`--proxy-server=socks5://${url.hostname}:${url.port}`)
+          socks: newProxyUrl, // Tambahkan ini untuk mendukung SOCKS
+          bypass: 'localhost,127.0.0.1' // Bypass untuk localhost
+        })
+      )
+      
+      // Tambahkan juga sebagai argumen Chrome
+      const proxyType = proxyUrl.startsWith('socks') ? 'socks5' : 'http';
+      options.addArguments(`--proxy-server=${proxyType}://${parsedUrl.hostname}:${parsedUrl.port}`);
+      
     console.log("-> Setting up proxy done!")
+    } catch (error) {
+      console.error("-> Error setting up proxy:", error.message)
+      console.log("-> Will try to continue without proxy...")
+    }
   } else {
     console.log("-> No proxy set!")
   }
@@ -168,189 +182,290 @@ async function getDriverOptions() {
 }
 
 async function getProxyIpInfo(driver, proxyUrl) {
-  // const url = "https://httpbin.org/ip"
-  const url = "https://myip.ipip.net"
+  // Coba beberapa layanan untuk memeriksa IP
+  const ipCheckUrls = [
+    "https://myip.ipip.net",
+    "https://httpbin.org/ip",
+    "https://api.ipify.org"
+  ];
 
   console.log("-> Getting proxy IP info:", proxyUrl)
 
+  let success = false;
+  let ipInfo = "";
+
+  for (const url of ipCheckUrls) {
   try {
+      console.log(`-> Checking IP using ${url}...`)
     await driver.get(url)
-    await driver.wait(until.elementLocated(By.css("body")), 30000)
+      await driver.wait(until.elementLocated(By.css("body")), 15000)
     const pageText = await driver.findElement(By.css("body")).getText()
     console.log("-> Proxy IP info:", pageText)
+      ipInfo = pageText;
+      success = true;
+      break;
+    } catch (error) {
+      console.log(`-> Failed to check IP using ${url}:`, error.message)
+    }
+  }
+
+  if (!success) {
+    console.error("-> Failed to get proxy IP info from all services")
+    if (PROXY) {
+      console.log(`-> Please check your proxy manually: curl -vv -x ${PROXY} https://api.ipify.org`)
+      console.log("-> If the proxy doesn't work, try another one or run without proxy")
+    }
+  }
+
+  return ipInfo;
+}
+
+// Fungsi untuk membuka halaman ekstensi
+async function openExtensionPage(driver) {
+  try {
+    await driver.get(`chrome-extension://${extensionId}/popup.html`);
+    return true;
   } catch (error) {
-    console.error("-> Failed to get proxy IP info:", error)
-    throw new Error("Failed to get proxy IP info!")
+    console.error(`-> Error opening extension page: ${error.message}`);
+    return false;
+  }
+}
+
+// Fungsi untuk mengklik tombol login di ekstensi
+async function clickLoginButton(driver) {
+  try {
+    console.log("-> Trying to click login button in extension...");
+    
+    // Coba dengan selector kompleks yang diberikan
+    const loginButtonSelector = "#root-gradient-extension-popup-20240807 > div > div > div > div.mt-\\[50px\\].h-\\[48px\\].w-full.rounded-\\[125px\\].bg-\\[\\#FFFFFF\\].px-\\[32px\\].py-\\[7\\.5px\\].flex.justify-center.items-center.select-none.text-\\[16px\\].cursor-pointer";
+    
+    try {
+      // Tunggu tombol login muncul
+      await driver.wait(until.elementLocated(By.css(loginButtonSelector)), 15000);
+      
+      // Klik tombol login
+      await driver.findElement(By.css(loginButtonSelector)).click();
+      console.log("-> Login button clicked successfully!");
+      
+      return true;
+    } catch (error) {
+      console.log("-> Could not find specific login button, trying alternative selectors...");
+      
+      // Coba dengan selector yang lebih sederhana
+      const alternativeSelectors = [
+        "button:contains('Login')",
+        "div.cursor-pointer:contains('Login')",
+        "div.bg-\\[\\#FFFFFF\\].cursor-pointer",
+        "div.rounded-\\[125px\\].cursor-pointer"
+      ];
+      
+      for (const selector of alternativeSelectors) {
+        try {
+          // Gunakan JavaScript executor untuk mencari elemen berdasarkan teks
+          const element = await driver.executeScript(`
+            return document.querySelector("${selector.replace(/"/g, '\\"')}") || 
+                   Array.from(document.querySelectorAll("div")).find(el => 
+                     el.textContent.includes("Login") && 
+                     (el.className.includes("cursor-pointer") || el.style.cursor === "pointer")
+                   );
+          `);
+          
+          if (element) {
+            await driver.executeScript("arguments[0].click();", element);
+            console.log(`-> Login button clicked using alternative selector: ${selector}`);
+            return true;
+          }
+        } catch (innerError) {
+          console.log(`-> Failed with selector ${selector}`);
+        }
+      }
+      
+      console.log("-> Could not click login button using any method");
+      return false;
+    }
+  } catch (error) {
+    console.error(`-> Error in clickLoginButton: ${error.message}`);
+    return false;
+  }
+}
+
+// Fungsi untuk setup browser
+async function setupBrowser(customProxy) {
+  try {
+    // Download ekstensi terlebih dahulu
+    await downloadExtension(extensionId);
+
+    // Setup opsi browser
+    const options = await getDriverOptions();
+    options.addExtensions(path.resolve(__dirname, EXTENSION_FILENAME));
+    console.log(`-> Extension added! ${EXTENSION_FILENAME}`);
+
+    // Enable debug jika diperlukan
+  if (ALLOW_DEBUG) {
+      options.addArguments("--enable-logging");
+      options.addArguments("--v=1");
+  }
+
+    // Buat driver
+    console.log("-> Starting browser...");
+    const driver = await new Builder()
+      .forBrowser("chrome")
+      .setChromeOptions(options)
+      .build();
+    console.log("-> Browser started!");
+
+    // Periksa informasi proxy jika ada
+    let proxyIpInfo = "";
+    if (customProxy || PROXY) {
+      try {
+        proxyIpInfo = await getProxyIpInfo(driver, customProxy || PROXY);
+        if (proxyIpInfo) {
+          console.log("-> Successfully connected using proxy!");
+        } else {
+          console.log("-> Warning: Could not verify proxy, but will continue anyway...");
+        }
+      } catch (error) {
+        console.log("-> Warning: Failed to verify proxy, will try to continue anyway...");
+        const proxyToCheck = customProxy || PROXY;
+        console.log(`-> You can check your proxy manually: curl -vv -x ${proxyToCheck} https://api.ipify.org`);
+      }
+    }
+
+    // Login ke platform
+    console.log("-> Started! Logging in https://app.gradient.network/...");
+    try {
+      await driver.get("https://app.gradient.network/");
+      
+      // Cek apakah halaman login muncul
+      try {
+        const emailInput = By.css('[placeholder="Enter Email"]');
+        const passwordInput = By.css('[type="password"]');
+        const loginButton = By.css("button");
+
+        await driver.wait(until.elementLocated(emailInput), 30000);
+        await driver.wait(until.elementLocated(passwordInput), 30000);
+        await driver.wait(until.elementLocated(loginButton), 30000);
+
+        await driver.findElement(emailInput).sendKeys(USER);
+        await driver.findElement(passwordInput).sendKeys(PASSWORD);
+        await driver.findElement(loginButton).click();
+        
+        console.log("-> Login form submitted successfully");
+      } catch (loginError) {
+        console.log("-> Could not find login form, checking if already logged in...");
+      }
+
+      // Akses dashboard setting
+      console.log("-> Trying to access dashboard/setting directly...");
+      await driver.get("https://app.gradient.network/dashboard/setting");
+      
+      // Tunggu halaman dashboard dimuat
+      await driver.wait(until.elementLocated(By.css('body')), 30000);
+      
+      console.log("-> Logged in successfully!");
+      await takeScreenshot(driver, "logined.png");
+    } catch (navigationError) {
+      console.error("-> Error navigating to Gradient Network:", navigationError.message);
+      console.log("-> This could be due to network issues or the site blocking direct access.");
+      console.log("-> Try using a proxy by creating a proxies.txt file.");
+
+    if (ALLOW_DEBUG) {
+        await generateErrorReport(driver);
+      }
+      
+      throw new Error("Failed to navigate to Gradient Network.");
+    }
+
+    return { driver, proxyIpInfo };
+  } catch (error) {
+    console.error("-> Error in setupBrowser:", error.message);
+    throw error;
+  }
+}
+
+async function main(proxy) {
+  let driver = null;
+  
+  try {
+    const { driver: newDriver } = await setupBrowser(proxy);
+    driver = newDriver;
+    
+    await driver.sleep(3000);
+    
+    await openExtensionPage(driver);
+    
+    await driver.sleep(5000);
+    
+    await clickLoginButton(driver);
+    
+    await driver.sleep(5000);
+
+    console.log("-> Navigating to dashboard...");
+    await driver.get("https://app.gradient.network/dashboard");
+    await driver.wait(until.elementLocated(By.css('body')), 30000);
+    console.log("-> Dashboard page is open.");
+
+    console.log("-> Opening extension in a new tab...");
+    await driver.switchTo().newWindow('tab');
+    await openExtensionPage(driver);
+    console.log("-> Extension is open in a new tab.");
+
+    const handles = await driver.getAllWindowHandles();
+    const dashboardHandle = handles[0];
+    const extensionHandle = handles[1];
+
+    console.log("-> Bot is now running indefinitely with dashboard and extension tabs open.");
+    
+    let lastRefreshTime = Date.now();
+    
+    while (true) {
+      await driver.sleep(60000);
+
+      const currentTime = Date.now();
+      if (currentTime - lastRefreshTime > 3 * 60 * 60 * 1000) {
+        try {
+          console.log("-> Refreshing pages to keep sessions alive...");
+          
+          await driver.switchTo().window(dashboardHandle);
+          await driver.navigate().refresh();
+          
+          await driver.switchTo().window(extensionHandle);
+          await driver.navigate().refresh();
+
+          console.log("-> Pages refreshed successfully.");
+          lastRefreshTime = currentTime;
+        } catch (refreshError) {
+          console.error("-> Failed to refresh pages:", refreshError.message);
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`-> Error in main function: ${error.message}`);
+    if (ALLOW_DEBUG && driver) {
+      await generateErrorReport(driver);
+    }
+    
+    console.log("-> Attempting to keep the browser running despite the error...");
+    try {
+      if (driver) {
+        while (true) {
+          await driver.sleep(300000);
+        }
+      }
+    } catch (keepAliveError) {
+      console.error("-> Failed to keep browser alive after error:", keepAliveError.message);
+    }
   }
 }
 
 (async () => {
-  await downloadExtension(extensionId)
-
-  const options = await getDriverOptions()
-
-  options.addExtensions(path.resolve(__dirname, EXTENSION_FILENAME))
-
-  console.log(`-> Extension added! ${EXTENSION_FILENAME}`)
-
-  // enable debug
-  if (ALLOW_DEBUG) {
-    options.addArguments("--enable-logging")
-    options.addArguments("--v=1")
-  }
-
-  let driver
   try {
-    console.log("-> Starting browser...")
-
-    driver = await new Builder()
-      .forBrowser("chrome")
-      .setChromeOptions(options)
-      .build()
-
-    console.log("-> Browser started!")
-
-    if (PROXY) {
-      try {
-        await getProxyIpInfo(driver, PROXY)
-      } catch (error) {
-        throw new Error("Failed to get proxy IP info, please check the proxy by the command 'curl -vv -x ${PROXY} https://myip.ipip.net'")
-      }
-    }
-
-    console.log("-> Started! Logging in https://app.gradient.network/...")
-    await driver.get("https://app.gradient.network/")
-
-    const emailInput = By.css('[placeholder="Enter Email"]')
-    const passwordInput = By.css('[type="password"]')
-    const loginButton = By.css("button")
-
-    await driver.wait(until.elementLocated(emailInput), 30000)
-    await driver.wait(until.elementLocated(passwordInput), 30000)
-    await driver.wait(until.elementLocated(loginButton), 30000)
-
-    await driver.findElement(emailInput).sendKeys(USER)
-    await driver.findElement(passwordInput).sendKeys(PASSWORD)
-    await driver.findElement(loginButton).click()
-
-    // wait until find <a href="/dashboard/setting">
-    await driver.wait(until.elementLocated(By.css('a[href="/dashboard/setting"]')), 30000)
-
-    console.log("-> Logged in! Waiting for open extension...")
-
-    // 截图登录状态
-    takeScreenshot(driver, "logined.png")
-
-    await driver.get(`chrome-extension://${extensionId}/popup.html`)
-
-    console.log("-> Extension opened!")
-
-    // 直到找到 "Status" 文本的 div 元素
-    await driver.wait(
-      until.elementLocated(By.xpath('//div[contains(text(), "Status")]')),
-      30000
-    )
-
-    console.log("-> Extension loaded!")
-
-    // if there is a page with a button "I got it", click it
-    try {
-      const gotItButton = await driver.findElement(
-        By.xpath('//button[contains(text(), "I got it")]')
-      )
-      await gotItButton.click()
-      console.log('-> "I got it" button clicked!')
-    } catch (error) {
-      // save rendered dom to file
-      const dom = await driver
-        .findElement(By.css("html"))
-        .getAttribute("outerHTML")
-      fs.writeFileSync("dom.html", dom)
-      console.error('-> No "I got it" button found!(skip)')
-    }
-
-    // if found a div include text "Sorry, Gradient is not yet available in your region. ", then exit
-    try {
-      const notAvailable = await driver.findElement(
-        By.xpath(
-          '//*[contains(text(), "Sorry, Gradient is not yet available in your region.")]'
-        )
-      )
-      console.log("-> Sorry, Gradient is not yet available in your region. ")
-      await driver.quit()
-      process.exit(1)
-    } catch (error) {
-      console.log("-> Gradient is available in your region. ")
-    }
-
-    // <div class="absolute mt-3 right-0 z-10">
-    const supportStatus = await driver
-      .findElement(By.css(".absolute.mt-3.right-0.z-10"))
-      .getText()
-
-
-    if (ALLOW_DEBUG) {
-      const dom = await driver
-        .findElement(By.css("html"))
-        .getAttribute("outerHTML")
-      fs.writeFileSync("dom.html", dom)
-      await takeScreenshot(driver, "status.png")
-    }
-
-    console.log("-> Status:", supportStatus)
-
-    if (supportStatus.includes("Disconnected")) {
-      console.log(
-        "-> Failed to connect! Please check the following: ",
-      )
-      console.log(`
-    - Make sure the proxy is working, by 'curl -vv -x ${PROXY} https://myip.ipip.net'
-    - Make sure the docker image is up to date, by 'docker pull overtrue/gradient-bot' and re-start the container.
-    - The official service itself is not very stable. So it is normal to see abnormal situations. Just wait patiently and it will restart automatically.
-    - If you are using a free proxy, it may be banned by the official service. Please try another static Static Residential proxy.
-  `)
-      await generateErrorReport(driver)
-      await driver.quit()
-      setTimeout(() => {
-        process.exit(1)
-      }, 5000)
-    }
-
-    console.log("-> Connected! Starting rolling...")
-
-    // 截图链接状态
-    takeScreenshot(driver, "connected.png")
-
-    console.log({
-      support_status: supportStatus,
-    })
-
-    console.log("-> Lunched!")
-
-    // keep the process running
-    setInterval(() => {
-      driver.getTitle().then((title) => {
-        console.log(`-> [${USER}] Running...`, title)
-      })
-
-      if (PROXY) {
-        console.log(`-> [${USER}] Running with proxy ${PROXY}...`)
-      } else {
-        console.log(`-> [${USER}] Running without proxy...`)
-      }
-    }, 30000)
+    await main(PROXY);
   } catch (error) {
-    console.error("Error occurred:", error)
-    // show error line
-    console.error(error.stack)
-
-    if (driver) {
-      await generateErrorReport(driver)
-      console.error("-> Error report generated!")
-      console.error(fs.readFileSync("error.log").toString())
-      driver.quit()
-    }
-
-    process.exit(1)
+    console.error("Error in main execution:", error);
+    console.error(error.stack);
+    process.exit(1);
   }
-})()
+})();
+
+
