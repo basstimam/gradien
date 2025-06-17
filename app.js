@@ -8,6 +8,7 @@ const path = require("path")
 const FormData = require("form-data")
 const proxy = require("selenium-webdriver/proxy")
 const proxyChain = require("proxy-chain")
+const axios = require("axios")
 require('console-stamp')(console, {
   format: ':date(yyyy/mm/dd HH:MM:ss.l)'
 })
@@ -24,11 +25,18 @@ const ALLOW_DEBUG = !!process.env.DEBUG?.length || false
 const EXTENSION_FILENAME = "app.crx"
 const PROXY = process.env.PROXY || undefined
 
+// Konfigurasi Telegram statis
+const TELEGRAM_BOT_TOKEN = "7781646205:AAGm-JZbvv8-LXW5Ol-h4QcFdGOGzxyQHi0"
+let TELEGRAM_CHAT_ID = ""
+const SEND_SCREENSHOT_TO_TELEGRAM = true
+const SCREENSHOT_INTERVAL_MINUTES = 120 // Setiap 2 jam
+
 console.log("-> Starting...")
 console.log("-> User:", USER)
 console.log("-> Pass:", PASSWORD)
 console.log("-> Proxy:", PROXY)
 console.log("-> Debug:", ALLOW_DEBUG)
+console.log("-> Send Screenshot to Telegram:", SEND_SCREENSHOT_TO_TELEGRAM)
 
 if (!USER || !PASSWORD) {
   console.error("Please set APP_USER and APP_PASS env variables")
@@ -39,6 +47,72 @@ if (ALLOW_DEBUG) {
   console.log(
     "-> Debugging is enabled! This will generate a screenshot and console logs on error!"
   )
+}
+
+// Fungsi untuk mendapatkan chat_id dari Telegram
+async function getChatId() {
+  try {
+    console.log("-> Mendapatkan daftar update terbaru dari bot Telegram...")
+    const response = await axios.get(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates`)
+    
+    if (response.data && response.data.ok && response.data.result && response.data.result.length > 0) {
+      // Ambil chat_id dari update terakhir
+      const updates = response.data.result
+      const lastUpdate = updates[updates.length - 1]
+      
+      if (lastUpdate.message && lastUpdate.message.chat) {
+        const chatId = lastUpdate.message.chat.id
+        console.log(`-> Berhasil mendapatkan chat_id: ${chatId}`)
+        return chatId.toString()
+      }
+    }
+    
+    console.log("-> Tidak dapat menemukan chat_id")
+    return ""
+  } catch (error) {
+    console.error(`-> Error saat mendapatkan chat_id: ${error.message}`)
+    return ""
+  }
+}
+
+// Fungsi untuk mengirim screenshot ke Telegram
+async function sendToTelegram(filePath, caption) {
+  try {
+    // Pastikan kita punya chat_id
+    if (!TELEGRAM_CHAT_ID) {
+      TELEGRAM_CHAT_ID = await getChatId()
+      
+      if (!TELEGRAM_CHAT_ID) {
+        console.error("-> Tidak dapat mengirim ke Telegram: chat_id tidak ditemukan")
+        console.log("-> Silakan kirim pesan ke bot Telegram Anda terlebih dahulu untuk mendapatkan chat_id")
+        return false
+      }
+    }
+    
+    console.log("-> Mengirim screenshot ke Telegram...")
+    
+    const form = new FormData()
+    form.append('chat_id', TELEGRAM_CHAT_ID)
+    form.append('caption', caption)
+    form.append('photo', fs.createReadStream(filePath))
+    
+    const response = await axios.post(
+      `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, 
+      form, 
+      { headers: form.getHeaders() }
+    )
+    
+    if (response.data && response.data.ok) {
+      console.log("-> Screenshot berhasil dikirim ke Telegram!")
+      return true
+    } else {
+      console.error("-> Gagal mengirim ke Telegram:", response.data)
+      return false
+    }
+  } catch (error) {
+    console.error(`-> Error saat mengirim ke Telegram: ${error.message}`)
+    return false
+  }
 }
 
 async function downloadExtension(extensionId) {
@@ -70,13 +144,15 @@ async function downloadExtension(extensionId) {
 }
 
 async function takeScreenshot(driver, filename) {
-  // if ALLOW_DEBUG is set, taking screenshot
-  if (!ALLOW_DEBUG) {
-    return
+  try {
+    const data = await driver.takeScreenshot()
+    fs.writeFileSync(filename, Buffer.from(data, "base64"))
+    console.log(`-> Screenshot taken and saved: ${filename}`)
+    return path.resolve(process.cwd(), filename)
+  } catch (error) {
+    console.error(`-> Error taking screenshot: ${error.message}`)
+    return null
   }
-
-  const data = await driver.takeScreenshot()
-  fs.writeFileSync(filename, Buffer.from(data, "base64"))
 }
 
 async function generateErrorReport(driver) {
@@ -224,6 +300,7 @@ async function getProxyIpInfo(driver, proxyUrl) {
 async function openExtensionPage(driver) {
   try {
     await driver.get(`chrome-extension://${extensionId}/popup.html`);
+    console.log("-> Extension page opened successfully");
     return true;
   } catch (error) {
     console.error(`-> Error opening extension page: ${error.message}`);
@@ -285,6 +362,49 @@ async function clickLoginButton(driver) {
     }
   } catch (error) {
     console.error(`-> Error in clickLoginButton: ${error.message}`);
+    return false;
+  }
+}
+
+// Fungsi untuk mengambil screenshot extension dan mengirimkannya ke Telegram
+async function captureAndSendExtensionScreenshot(driver) {
+  try {
+    console.log("-> Capturing extension screenshot for Telegram...")
+    
+    // Pastikan tab extension sedang aktif
+    const handles = await driver.getAllWindowHandles();
+    for (let i = 0; i < handles.length; i++) {
+      await driver.switchTo().window(handles[i]);
+      const currentUrl = await driver.getCurrentUrl();
+      
+      if (currentUrl.includes(`chrome-extension://${extensionId}`)) {
+        console.log("-> Extension tab is active");
+        break;
+      }
+      
+      // Jika ini adalah handle terakhir dan belum menemukan extension
+      if (i === handles.length - 1) {
+        console.log("-> Extension tab not found, opening extension in a new tab");
+        await driver.switchTo().newWindow('tab');
+        await openExtensionPage(driver);
+        await driver.sleep(3000);
+      }
+    }
+    
+    // Ambil screenshot
+    const timestamp = new Date().toISOString().replace(/:/g, '-');
+    const filename = `gradient-extension-${timestamp}.png`;
+    const screenshotPath = await takeScreenshot(driver, filename);
+    
+    if (screenshotPath) {
+      // Kirim screenshot ke Telegram
+      const caption = `🤖 Gradient Extension Screenshot - ${new Date().toLocaleString()}`;
+      await sendToTelegram(screenshotPath, caption);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error(`-> Error capturing and sending extension screenshot: ${error.message}`);
     return false;
   }
 }
@@ -383,68 +503,6 @@ async function setupBrowser(customProxy) {
   }
 }
 
-// Fungsi untuk memeriksa status di ekstensi
-async function checkExtensionStatus(driver) {
-  try {
-    console.log("-> Checking extension status...");
-    
-    // Pastikan kita berada di tab ekstensi
-    await openExtensionPage(driver);
-    
-    // Tunggu sejenak untuk memastikan konten ekstensi dimuat
-    await driver.sleep(3000);
-    
-    // Cari status (span yang berisi "Unsupported", "Disconnected", atau "Good")
-    const statusElements = await driver.findElements(By.css("span"));
-    let statusFound = false;
-    
-    for (const element of statusElements) {
-      try {
-        const text = await element.getText();
-        if (["Unsupported", "Disconnected", "Good"].includes(text)) {
-          const statusText = text;
-          const statusClass = await element.getAttribute("class");
-          console.log(`-> Status ditemukan: ${statusText} (Class: ${statusClass})`);
-          
-          // Tambahkan emoji untuk memudahkan melihat status
-          let emoji = "❓";
-          if (statusText === "Good") emoji = "✅";
-          if (statusText === "Disconnected") emoji = "❌";
-          if (statusText === "Unsupported") emoji = "⚠️";
-          
-          console.log(`-> Status Ekstensi ${emoji}: ${statusText}`);
-          statusFound = true;
-          
-          // Tambahkan tindakan berdasarkan status jika diperlukan
-          if (statusText === "Disconnected") {
-            console.log("-> Mencoba mengklik tombol login karena status Disconnected...");
-            await clickLoginButton(driver);
-          }
-          
-          break;
-        }
-      } catch (elementError) {
-        // Lewati elemen yang tidak dapat diakses
-        continue;
-      }
-    }
-    
-    if (!statusFound) {
-      console.log("-> Status tidak ditemukan di ekstensi 🔍");
-      
-      // Coba ambil screenshot jika tidak menemukan status
-      if (ALLOW_DEBUG) {
-        await takeScreenshot(driver, "extension_status_not_found.png");
-      }
-    }
-    
-    return statusFound;
-  } catch (error) {
-    console.error(`-> Error saat memeriksa status ekstensi: ${error.message} ⚠️`);
-    return false;
-  }
-}
-
 async function main(proxy) {
   let driver = null;
   
@@ -462,49 +520,39 @@ async function main(proxy) {
     
     await driver.sleep(5000);
 
-    console.log("-> Membuka dashboard... 🖥️");
+    console.log("-> Navigating to dashboard...");
     await driver.get("https://app.gradient.network/dashboard");
     await driver.wait(until.elementLocated(By.css('body')), 30000);
-    console.log("-> Dashboard terbuka dengan sukses! ✅");
+    console.log("-> Dashboard page is open.");
 
-    console.log("-> Membuka ekstensi di tab baru... 🧩");
+    console.log("-> Opening extension in a new tab...");
     await driver.switchTo().newWindow('tab');
     await openExtensionPage(driver);
-    console.log("-> Ekstensi terbuka di tab baru! ✅");
+    console.log("-> Extension is open in a new tab.");
 
     const handles = await driver.getAllWindowHandles();
     const dashboardHandle = handles[0];
     const extensionHandle = handles[1];
 
-    console.log("-> Bot berjalan dengan tab dashboard dan ekstensi terbuka 🤖");
+    // Ambil screenshot extension dan kirim ke Telegram jika diaktifkan
+    if (SEND_SCREENSHOT_TO_TELEGRAM) {
+      await captureAndSendExtensionScreenshot(driver);
+    }
+
+    console.log("-> Bot is now running indefinitely with dashboard and extension tabs open.");
     
     let lastRefreshTime = Date.now();
-    let lastCheckStatusTime = Date.now();
+    let lastScreenshotTime = Date.now();
     
     while (true) {
-      await driver.sleep(10000); // Cek setiap 10 detik
+      await driver.sleep(60000); // Sleep 1 menit
 
       const currentTime = Date.now();
       
-      // Periksa status ekstensi setiap 2 menit
-      if (currentTime - lastCheckStatusTime > 2 * 60 * 1000) {
-        try {
-          console.log("-> Saatnya memeriksa status ekstensi (interval 2 menit) 🕒");
-          
-          await driver.switchTo().window(extensionHandle);
-          await openExtensionPage(driver); // Buka ulang ekstensi
-          await checkExtensionStatus(driver);
-          
-          lastCheckStatusTime = currentTime;
-        } catch (statusError) {
-          console.error(`-> Gagal memeriksa status ekstensi: ${statusError.message} ❌`);
-        }
-      }
-      
-      // Refresh halaman setiap 3 jam untuk menjaga sesi tetap aktif
+      // Refresh halaman setiap 3 jam
       if (currentTime - lastRefreshTime > 3 * 60 * 60 * 1000) {
         try {
-          console.log("-> Menyegarkan halaman untuk menjaga sesi tetap aktif... 🔄");
+          console.log("-> Refreshing pages to keep sessions alive...");
           
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
@@ -512,20 +560,31 @@ async function main(proxy) {
           await driver.switchTo().window(extensionHandle);
           await driver.navigate().refresh();
 
-          console.log("-> Halaman berhasil disegarkan! ✅");
+          console.log("-> Pages refreshed successfully.");
           lastRefreshTime = currentTime;
         } catch (refreshError) {
-          console.error(`-> Gagal menyegarkan halaman: ${refreshError.message} ❌`);
+          console.error("-> Failed to refresh pages:", refreshError.message);
+        }
+      }
+      
+      // Ambil dan kirim screenshot sesuai interval
+      if (SEND_SCREENSHOT_TO_TELEGRAM && currentTime - lastScreenshotTime > SCREENSHOT_INTERVAL_MINUTES * 60 * 1000) {
+        try {
+          console.log("-> Taking scheduled screenshot of extension...");
+          await captureAndSendExtensionScreenshot(driver);
+          lastScreenshotTime = currentTime;
+        } catch (screenshotError) {
+          console.error("-> Failed to take scheduled screenshot:", screenshotError.message);
         }
       }
     }
   } catch (error) {
-    console.error(`-> Error dalam fungsi main: ${error.message} ❌`);
+    console.error(`-> Error in main function: ${error.message}`);
     if (ALLOW_DEBUG && driver) {
       await generateErrorReport(driver);
     }
     
-    console.log("-> Mencoba mempertahankan browser tetap berjalan meskipun terjadi error... 🛠️");
+    console.log("-> Attempting to keep the browser running despite the error...");
     try {
       if (driver) {
         while (true) {
@@ -533,7 +592,7 @@ async function main(proxy) {
         }
       }
     } catch (keepAliveError) {
-      console.error(`-> Gagal menjaga browser tetap hidup setelah error: ${keepAliveError.message} ❌`);
+      console.error("-> Failed to keep browser alive after error:", keepAliveError.message);
     }
   }
 }
