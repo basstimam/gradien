@@ -471,13 +471,172 @@ async function clickLoginButton(driver) {
   }
 }
 
+// Fungsi untuk mengklik tombol close pada extension
+async function clickCloseButton(driver) {
+  try {
+    console.log("-> Mencoba mengklik tombol close pada extension...");
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
+    // Metode 1: Menggunakan XPath yang diberikan
+    try {
+      const xpath = '/html/body/div[3]/div/div[2]/div/div[1]/div/div/div/button';
+      await driver.wait(until.elementLocated(By.xpath(xpath)), 5000);
+      const element = await driver.findElement(By.xpath(xpath));
+      
+      // Ambil screenshot sebelum klik
+      await takeScreenshot(driver, "before-close-button-click.png");
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
+      // Klik elemen
+      await driver.executeScript("arguments[0].click();", element);
+      console.log("-> Tombol close berhasil diklik!");
+      
+      // Tunggu 2 detik dan ambil screenshot setelah klik
+      await driver.sleep(2000);
+      const screenshotPath = await takeScreenshot(driver, "after-close-button-click.png");
+      
+      // Kirim screenshot ke Telegram
+      if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+        await sendToTelegram(screenshotPath, "✖️ Tombol close berhasil diklik pada extension Gradient Network");
+      }
+      
+      return true;
+    } catch (error) {
+      console.log(`-> Error saat menggunakan XPath close button: ${error.message}`);
+    }
+    
+    // Metode 2: Mencoba mencari tombol close dengan teks
+    try {
+      // Cari elemen yang mengandung teks "close" atau "Close"
+      const closeElements = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("button")).filter(el => 
+          el.textContent.toLowerCase().includes("close") || 
+          (el.getAttribute("aria-label") && el.getAttribute("aria-label").toLowerCase().includes("close"))
+        );
+      `);
+      
+      if (closeElements && closeElements.length > 0) {
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+        
+        // Klik elemen pertama yang ditemukan
+        await driver.executeScript("arguments[0].click();", closeElements[0]);
+        console.log("-> Tombol close berhasil diklik menggunakan pencarian teks!");
+        
+        // Tunggu 2 detik dan ambil screenshot setelah klik
+        await driver.sleep(2000);
+        const screenshotPath = await takeScreenshot(driver, "after-close-button-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "✖️ Tombol close berhasil diklik pada extension Gradient Network");
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.log(`-> Error saat mencari tombol close dengan teks: ${error.message}`);
+    }
+    
+    console.log("-> Tidak dapat menemukan tombol close.");
+    return false;
+  } catch (error) {
+    console.error(`-> Error dalam clickCloseButton: ${error.message}`);
+    return false;
+  }
+}
+
+// Fungsi untuk mengklik tombol "I got it" pada extension
+async function clickIGotItButton(driver) {
+  try {
+    console.log("-> Mencoba mengklik tombol 'I got it' pada extension...");
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
+    // Metode 1: Menggunakan XPath yang diberikan
+    try {
+      const xpath = '/html/body/div[2]/div/div[2]/div/div[1]/div/div/div/button';
+      await driver.wait(until.elementLocated(By.xpath(xpath)), 5000);
+      const element = await driver.findElement(By.xpath(xpath));
+      
+      // Ambil screenshot sebelum klik
+      await takeScreenshot(driver, "before-igotit-button-click.png");
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
+      // Klik elemen
+      await driver.executeScript("arguments[0].click();", element);
+      console.log("-> Tombol 'I got it' berhasil diklik!");
+      
+      // Tunggu 2 detik dan ambil screenshot setelah klik
+      await driver.sleep(2000);
+      const screenshotPath = await takeScreenshot(driver, "after-igotit-button-click.png");
+      
+      // Kirim screenshot ke Telegram
+      if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+        await sendToTelegram(screenshotPath, "👍 Tombol 'I got it' berhasil diklik pada extension Gradient Network");
+      }
+      
+      return true;
+    } catch (error) {
+      console.log(`-> Error saat menggunakan XPath I got it button: ${error.message}`);
+    }
+    
+    // Metode 2: Mencoba mencari tombol dengan teks "I got it"
+    try {
+      // Cari elemen yang mengandung teks "I got it"
+      const gotItElements = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("button")).filter(el => 
+          el.textContent.includes("I got it") || 
+          el.textContent.includes("Got it") || 
+          el.textContent.includes("got it")
+        );
+      `);
+      
+      if (gotItElements && gotItElements.length > 0) {
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+        
+        // Klik elemen pertama yang ditemukan
+        await driver.executeScript("arguments[0].click();", gotItElements[0]);
+        console.log("-> Tombol 'I got it' berhasil diklik menggunakan pencarian teks!");
+        
+        // Tunggu 2 detik dan ambil screenshot setelah klik
+        await driver.sleep(2000);
+        const screenshotPath = await takeScreenshot(driver, "after-igotit-button-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "👍 Tombol 'I got it' berhasil diklik pada extension Gradient Network");
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.log(`-> Error saat mencari tombol 'I got it' dengan teks: ${error.message}`);
+    }
+    
+    console.log("-> Tidak dapat menemukan tombol 'I got it'.");
+    return false;
+  } catch (error) {
+    console.error(`-> Error dalam clickIGotItButton: ${error.message}`);
+    return false;
+  }
+}
+
 // Fungsi untuk mengklik tombol spesifik pada extension
 async function clickSpecificButton(driver) {
   try {
     console.log("-> Mencoba mengklik tombol spesifik pada extension...");
     
-    // Tunggu beberapa saat agar halaman dimuat dengan baik
-    await driver.sleep(5000);
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Metode 1: Menggunakan XPath yang diberikan
     try {
@@ -488,12 +647,15 @@ async function clickSpecificButton(driver) {
       // Ambil screenshot sebelum klik
       await takeScreenshot(driver, "before-specific-button-click.png");
       
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
       // Klik elemen
       await driver.executeScript("arguments[0].click();", element);
       console.log("-> Tombol spesifik berhasil diklik menggunakan XPath!");
       
-      // Tunggu sebentar dan ambil screenshot setelah klik
-      await driver.sleep(3000);
+      // Tunggu 2 detik dan ambil screenshot setelah klik
+      await driver.sleep(2000);
       const screenshotPath = await takeScreenshot(driver, "after-specific-button-click.png");
       
       // Kirim screenshot ke Telegram
@@ -735,12 +897,16 @@ async function main(proxy) {
     const { driver: newDriver } = await setupBrowser(proxy);
     driver = newDriver;
     
-    await driver.sleep(3000);
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Login ke app.gradient.network terlebih dahulu
     console.log("-> Navigating to app.gradient.network...");
     await driver.get("https://app.gradient.network/");
     await driver.wait(until.elementLocated(By.css('body')), 30000);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Cek apakah halaman login muncul
     try {
@@ -752,12 +918,25 @@ async function main(proxy) {
       await driver.wait(until.elementLocated(passwordInput), 30000);
       await driver.wait(until.elementLocated(loginButton), 30000);
 
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+
       await driver.findElement(emailInput).sendKeys(USER);
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
       await driver.findElement(passwordInput).sendKeys(PASSWORD);
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
       await driver.findElement(loginButton).click();
       
       console.log("-> Login form submitted successfully");
-      await driver.sleep(5000);
+      
+      // Tunggu 2 detik
+      await driver.sleep(2000);
     } catch (loginError) {
       console.log("-> Could not find login form, checking if already logged in...");
     }
@@ -765,8 +944,15 @@ async function main(proxy) {
     // Pastikan sudah login dengan mengakses halaman dashboard
     console.log("-> Trying to access dashboard/setting directly...");
     await driver.get("https://app.gradient.network/dashboard/setting");
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
     await driver.wait(until.elementLocated(By.css('body')), 30000);
     console.log("-> Logged in successfully!");
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Ambil screenshot halaman dashboard dan kirim ke Telegram
     const dashboardScreenshotPath = await takeScreenshot(driver, "dashboard.png");
@@ -774,18 +960,38 @@ async function main(proxy) {
       await sendToTelegram(dashboardScreenshotPath, "🖥️ Berhasil login ke dashboard Gradient Network");
     }
     
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
     // Buka extension di tab baru
     console.log("-> Membuka extension di tab baru...");
     await driver.switchTo().newWindow('tab');
     const extensionUrl = `chrome-extension://${extensionId}/popup.html`;
     await driver.get(extensionUrl);
-    await driver.sleep(5000);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
+    // Coba klik tombol "I got it" jika ada
+    await clickIGotItButton(driver);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
+    // Coba klik tombol "close" jika ada
+    await clickCloseButton(driver);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Ambil screenshot extension sebelum klik tombol
     const beforeClickScreenshotPath = await takeScreenshot(driver, "extension-before-click.png");
     if (SEND_SCREENSHOT_TO_TELEGRAM && beforeClickScreenshotPath) {
       await sendToTelegram(beforeClickScreenshotPath, "🔍 Extension Gradient Network sebelum klik tombol spesifik");
     }
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Klik tombol spesifik pada extension
     console.log("-> Mencoba klik tombol spesifik pada extension...");
@@ -797,20 +1003,41 @@ async function main(proxy) {
       console.log("-> Gagal mengklik tombol spesifik, akan tetap melanjutkan proses...");
     }
     
-    await driver.sleep(5000);
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Buka kembali halaman extension dan refresh
     console.log("-> Membuka kembali halaman extension dan refresh...");
     await driver.get(extensionUrl);
-    await driver.sleep(3000);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
     await driver.navigate().refresh();
-    await driver.sleep(5000);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
+    // Coba klik tombol "I got it" jika ada setelah refresh
+    await clickIGotItButton(driver);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
+    
+    // Coba klik tombol "close" jika ada setelah refresh
+    await clickCloseButton(driver);
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Ambil screenshot setelah refresh dan kirim ke Telegram
     const afterRefreshScreenshotPath = await takeScreenshot(driver, "extension-after-refresh.png");
     if (SEND_SCREENSHOT_TO_TELEGRAM && afterRefreshScreenshotPath) {
       await sendToTelegram(afterRefreshScreenshotPath, "🔄 Extension Gradient Network setelah refresh");
     }
+    
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Simpan handle untuk kedua tab
     const handles = await driver.getAllWindowHandles();
@@ -836,20 +1063,52 @@ async function main(proxy) {
           // Refresh dashboard
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
-          await driver.sleep(5000);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
           
           // Refresh extension, klik tombol spesifik, dan refresh lagi
           await driver.switchTo().window(extensionHandle);
           await driver.navigate().refresh();
-          await driver.sleep(5000);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
+          
+          // Coba klik tombol "I got it" jika ada setelah refresh
+          await clickIGotItButton(driver);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
+          
+          // Coba klik tombol "close" jika ada setelah refresh
+          await clickCloseButton(driver);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
           
           // Coba klik tombol spesifik lagi
           await clickSpecificButton(driver);
-          await driver.sleep(5000);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
           
           // Refresh extension lagi
           await driver.navigate().refresh();
-          await driver.sleep(5000);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
+          
+          // Coba klik tombol "I got it" jika ada setelah refresh kedua
+          await clickIGotItButton(driver);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
+          
+          // Coba klik tombol "close" jika ada setelah refresh kedua
+          await clickCloseButton(driver);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
           
           // Ambil screenshot dan kirim ke Telegram
           const refreshScreenshotPath = await takeScreenshot(driver, "extension-periodic-refresh.png");
@@ -871,6 +1130,9 @@ async function main(proxy) {
           
           // Pastikan tab extension aktif
           await driver.switchTo().window(extensionHandle);
+          
+          // Tunggu 2 detik
+          await driver.sleep(2000);
           
           // Ambil screenshot dan kirim ke Telegram
           const screenshotPath = await takeScreenshot(driver, `extension-${new Date().toISOString().replace(/:/g, '-')}.png`);
