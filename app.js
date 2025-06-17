@@ -311,83 +311,162 @@ async function openExtensionPage(driver) {
 // Fungsi untuk mengklik tombol login di ekstensi
 async function clickLoginButton(driver) {
   try {
-    console.log("-> Trying to click login button in extension...");
+    console.log("-> Mencari tombol 'Log in' di extension...");
     
-    // Coba dengan mencari teks "Log in" terlebih dahulu
+    // Tunggu beberapa saat agar halaman dimuat dengan baik
+    await driver.sleep(5000);
+    
+    // Metode 1: Cari elemen yang mengandung teks "Log in" secara tepat
     try {
-      // Tunggu beberapa saat agar halaman dimuat dengan baik
-      await driver.sleep(5000);
-      
-      // Gunakan JavaScript executor untuk mencari elemen dengan teks "Log in"
-      const loginElement = await driver.executeScript(`
-        return Array.from(document.querySelectorAll("*")).find(el => 
+      const loginElements = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("*")).filter(el => 
           el.textContent.trim() === "Log in" && 
-          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON")
+          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
+           el.onclick || el.parentElement.onclick)
         );
       `);
       
-      if (loginElement) {
-        await driver.executeScript("arguments[0].click();", loginElement);
-        console.log("-> Login button clicked successfully with text 'Log in'!");
-        return true;
-      }
+      console.log(`-> Ditemukan ${loginElements.length} elemen dengan teks 'Log in'`);
       
-      // Jika tidak menemukan "Log in", coba "Login"
-      const loginElement2 = await driver.executeScript(`
-        return Array.from(document.querySelectorAll("*")).find(el => 
-          el.textContent.trim() === "Login" && 
-          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON")
-        );
-      `);
-      
-      if (loginElement2) {
-        await driver.executeScript("arguments[0].click();", loginElement2);
-        console.log("-> Login button clicked successfully with text 'Login'!");
-        return true;
-      }
-      
-      // Jika masih tidak menemukan, coba dengan selector kompleks yang diberikan
-      const loginButtonSelector = "#root-gradient-extension-popup-20240807 > div > div > div > div.mt-\\[50px\\].h-\\[48px\\].w-full.rounded-\\[125px\\].bg-\\[\\#FFFFFF\\].px-\\[32px\\].py-\\[7\\.5px\\].flex.justify-center.items-center.select-none.text-\\[16px\\].cursor-pointer";
-      
-      await driver.wait(until.elementLocated(By.css(loginButtonSelector)), 5000);
-      await driver.findElement(By.css(loginButtonSelector)).click();
-      console.log("-> Login button clicked successfully with complex selector!");
-      
-      return true;
-    } catch (error) {
-      console.log("-> Could not find specific login button, trying alternative selectors...");
-      
-      // Coba dengan selector yang lebih sederhana
-      const alternativeSelectors = [
-        "div.cursor-pointer",
-        "div.bg-\\[\\#FFFFFF\\].cursor-pointer",
-        "div.rounded-\\[125px\\].cursor-pointer",
-        "button"
-      ];
-      
-      for (const selector of alternativeSelectors) {
-        try {
-          // Cari semua elemen yang cocok dengan selector
-          const elements = await driver.findElements(By.css(selector));
-          
-          for (const element of elements) {
-            const text = await element.getText();
-            if (text.includes("Log in") || text.includes("Login")) {
-              await element.click();
-              console.log(`-> Login button clicked using alternative selector: ${selector} with text: ${text}`);
-              return true;
-            }
-          }
-        } catch (innerError) {
-          console.log(`-> Failed with selector ${selector}`);
+      if (loginElements && loginElements.length > 0) {
+        // Ambil screenshot sebelum klik
+        await takeScreenshot(driver, "before-login.png");
+        
+        // Klik elemen pertama yang ditemukan
+        await driver.executeScript("arguments[0].click();", loginElements[0]);
+        console.log("-> Tombol 'Log in' berhasil diklik!");
+        
+        // Tunggu sebentar dan ambil screenshot setelah klik
+        await driver.sleep(3000);
+        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "🔐 Tombol 'Log in' berhasil diklik pada extension Gradient Network");
         }
+        
+        return true;
       }
-      
-      console.log("-> Could not click login button using any method");
-      return false;
+    } catch (error) {
+      console.log(`-> Error saat mencari 'Log in' tepat: ${error.message}`);
     }
+    
+    // Metode 2: Cari elemen yang mengandung teks "Log in" (case insensitive)
+    try {
+      const loginElements = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("*")).filter(el => 
+          el.textContent.trim().toLowerCase() === "log in" && 
+          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
+           el.onclick || el.parentElement.onclick)
+        );
+      `);
+      
+      console.log(`-> Ditemukan ${loginElements.length} elemen dengan teks 'log in' (case insensitive)`);
+      
+      if (loginElements && loginElements.length > 0) {
+        // Ambil screenshot sebelum klik
+        await takeScreenshot(driver, "before-login.png");
+        
+        // Klik elemen pertama yang ditemukan
+        await driver.executeScript("arguments[0].click();", loginElements[0]);
+        console.log("-> Tombol 'log in' berhasil diklik!");
+        
+        // Tunggu sebentar dan ambil screenshot setelah klik
+        await driver.sleep(3000);
+        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "🔐 Tombol 'log in' berhasil diklik pada extension Gradient Network");
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.log(`-> Error saat mencari 'log in' case insensitive: ${error.message}`);
+    }
+    
+    // Metode 3: Cari elemen yang mengandung teks "Log in" sebagai substring
+    try {
+      const loginElements = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("*")).filter(el => 
+          el.textContent.includes("Log in") && 
+          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
+           el.onclick || el.parentElement.onclick)
+        );
+      `);
+      
+      console.log(`-> Ditemukan ${loginElements.length} elemen yang mengandung 'Log in' sebagai substring`);
+      
+      if (loginElements && loginElements.length > 0) {
+        // Ambil screenshot sebelum klik
+        await takeScreenshot(driver, "before-login.png");
+        
+        // Klik elemen pertama yang ditemukan
+        await driver.executeScript("arguments[0].click();", loginElements[0]);
+        console.log("-> Tombol yang mengandung 'Log in' berhasil diklik!");
+        
+        // Tunggu sebentar dan ambil screenshot setelah klik
+        await driver.sleep(3000);
+        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "🔐 Tombol yang mengandung 'Log in' berhasil diklik pada extension Gradient Network");
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.log(`-> Error saat mencari substring 'Log in': ${error.message}`);
+    }
+    
+    // Metode 4: Cari tombol Login sebagai fallback
+    try {
+      console.log("-> Mencoba mencari tombol 'Login' sebagai alternatif...");
+      
+      const loginElements = await driver.executeScript(`
+        return Array.from(document.querySelectorAll("*")).filter(el => 
+          (el.textContent.includes("Login") || el.textContent.includes("login")) && 
+          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
+           el.onclick || el.parentElement.onclick)
+        );
+      `);
+      
+      if (loginElements && loginElements.length > 0) {
+        // Ambil screenshot sebelum klik
+        await takeScreenshot(driver, "before-login.png");
+        
+        // Klik elemen pertama yang ditemukan
+        await driver.executeScript("arguments[0].click();", loginElements[0]);
+        console.log("-> Tombol 'Login' berhasil diklik sebagai alternatif!");
+        
+        // Tunggu sebentar dan ambil screenshot setelah klik
+        await driver.sleep(3000);
+        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "🔐 Tombol 'Login' berhasil diklik pada extension Gradient Network");
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.log(`-> Error saat mencari tombol 'Login' alternatif: ${error.message}`);
+    }
+    
+    // Jika semua metode di atas gagal, ambil screenshot kondisi saat ini dan kirim ke Telegram
+    console.log("-> Tidak dapat menemukan tombol login dengan semua metode.");
+    const failScreenshotPath = await takeScreenshot(driver, "login-button-not-found.png");
+    
+    if (SEND_SCREENSHOT_TO_TELEGRAM && failScreenshotPath) {
+      await sendToTelegram(failScreenshotPath, "⚠️ Tidak dapat menemukan tombol login pada extension Gradient Network");
+    }
+    
+    return false;
   } catch (error) {
-    console.error(`-> Error in clickLoginButton: ${error.message}`);
+    console.error(`-> Error dalam clickLoginButton: ${error.message}`);
     return false;
   }
 }
@@ -548,11 +627,26 @@ async function main(proxy) {
     
     await driver.sleep(3000);
     
+    // Buka halaman extension
+    console.log("-> Membuka halaman extension Gradient Network...");
     await openExtensionPage(driver);
-    
     await driver.sleep(5000);
     
-    await clickLoginButton(driver);
+    // Ambil screenshot sebelum mencoba login
+    const beforeScreenshotPath = await takeScreenshot(driver, "extension-before-login.png");
+    if (SEND_SCREENSHOT_TO_TELEGRAM && beforeScreenshotPath) {
+      await sendToTelegram(beforeScreenshotPath, "🔍 Extension Gradient Network sebelum login");
+    }
+    
+    // Coba klik tombol login
+    console.log("-> Mencoba klik tombol login di extension...");
+    const loginSuccess = await clickLoginButton(driver);
+    
+    if (loginSuccess) {
+      console.log("-> Berhasil mengklik tombol login!");
+    } else {
+      console.log("-> Gagal mengklik tombol login, akan tetap melanjutkan proses...");
+    }
     
     await driver.sleep(5000);
 
