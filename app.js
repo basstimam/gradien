@@ -145,8 +145,8 @@ async function downloadExtension(extensionId) {
 
 async function takeScreenshot(driver, filename) {
   try {
-    const data = await driver.takeScreenshot()
-    fs.writeFileSync(filename, Buffer.from(data, "base64"))
+  const data = await driver.takeScreenshot()
+  fs.writeFileSync(filename, Buffer.from(data, "base64"))
     console.log(`-> Screenshot taken and saved: ${filename}`)
     return path.resolve(process.cwd(), filename)
   } catch (error) {
@@ -471,6 +471,116 @@ async function clickLoginButton(driver) {
   }
 }
 
+// Fungsi untuk mengklik tombol spesifik pada extension
+async function clickSpecificButton(driver) {
+  try {
+    console.log("-> Mencoba mengklik tombol spesifik pada extension...");
+    
+    // Tunggu beberapa saat agar halaman dimuat dengan baik
+    await driver.sleep(5000);
+    
+    // Metode 1: Menggunakan XPath yang diberikan
+    try {
+      const xpath = '//*[@id="root-gradient-extension-popup-20240807"]/div/div/div/div[3]';
+      await driver.wait(until.elementLocated(By.xpath(xpath)), 10000);
+      const element = await driver.findElement(By.xpath(xpath));
+      
+      // Ambil screenshot sebelum klik
+      await takeScreenshot(driver, "before-specific-button-click.png");
+      
+      // Klik elemen
+      await driver.executeScript("arguments[0].click();", element);
+      console.log("-> Tombol spesifik berhasil diklik menggunakan XPath!");
+      
+      // Tunggu sebentar dan ambil screenshot setelah klik
+      await driver.sleep(3000);
+      const screenshotPath = await takeScreenshot(driver, "after-specific-button-click.png");
+      
+      // Kirim screenshot ke Telegram
+      if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+        await sendToTelegram(screenshotPath, "🔘 Tombol spesifik berhasil diklik pada extension Gradient Network");
+      }
+      
+      return true;
+    } catch (error) {
+      console.log(`-> Error saat menggunakan XPath: ${error.message}`);
+    }
+    
+    // Metode 2: Mencoba dengan CSS selector
+    try {
+      const cssSelector = '#root-gradient-extension-popup-20240807 > div > div > div > div:nth-child(3)';
+      await driver.wait(until.elementLocated(By.css(cssSelector)), 5000);
+      const element = await driver.findElement(By.css(cssSelector));
+      
+      // Ambil screenshot sebelum klik
+      await takeScreenshot(driver, "before-specific-button-click.png");
+      
+      // Klik elemen
+      await driver.executeScript("arguments[0].click();", element);
+      console.log("-> Tombol spesifik berhasil diklik menggunakan CSS selector!");
+      
+      // Tunggu sebentar dan ambil screenshot setelah klik
+      await driver.sleep(3000);
+      const screenshotPath = await takeScreenshot(driver, "after-specific-button-click.png");
+      
+      // Kirim screenshot ke Telegram
+      if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+        await sendToTelegram(screenshotPath, "🔘 Tombol spesifik berhasil diklik pada extension Gradient Network");
+      }
+      
+      return true;
+    } catch (error) {
+      console.log(`-> Error saat menggunakan CSS selector: ${error.message}`);
+    }
+    
+    // Metode 3: Mencoba menggunakan JavaScript untuk menemukan elemen ketiga
+    try {
+      const element = await driver.executeScript(`
+        const container = document.querySelector('#root-gradient-extension-popup-20240807 > div > div > div');
+        if (container && container.children && container.children.length >= 3) {
+          return container.children[2]; // Elemen ketiga (0-indexed)
+        }
+        return null;
+      `);
+      
+      if (element) {
+        // Ambil screenshot sebelum klik
+        await takeScreenshot(driver, "before-specific-button-click.png");
+        
+        // Klik elemen
+        await driver.executeScript("arguments[0].click();", element);
+        console.log("-> Tombol spesifik berhasil diklik menggunakan JavaScript!");
+        
+        // Tunggu sebentar dan ambil screenshot setelah klik
+        await driver.sleep(3000);
+        const screenshotPath = await takeScreenshot(driver, "after-specific-button-click.png");
+        
+        // Kirim screenshot ke Telegram
+        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+          await sendToTelegram(screenshotPath, "🔘 Tombol spesifik berhasil diklik pada extension Gradient Network");
+        }
+        
+        return true;
+      }
+    } catch (error) {
+      console.log(`-> Error saat menggunakan JavaScript: ${error.message}`);
+    }
+    
+    // Jika semua metode di atas gagal, ambil screenshot kondisi saat ini dan kirim ke Telegram
+    console.log("-> Tidak dapat mengklik tombol spesifik dengan semua metode.");
+    const failScreenshotPath = await takeScreenshot(driver, "specific-button-not-found.png");
+    
+    if (SEND_SCREENSHOT_TO_TELEGRAM && failScreenshotPath) {
+      await sendToTelegram(failScreenshotPath, "⚠️ Tidak dapat mengklik tombol spesifik pada extension Gradient Network");
+    }
+    
+    return false;
+  } catch (error) {
+    console.error(`-> Error dalam clickSpecificButton: ${error.message}`);
+    return false;
+  }
+}
+
 // Fungsi untuk mengambil screenshot extension dan mengirimkannya ke Telegram
 async function captureAndSendExtensionScreenshot(driver) {
   try {
@@ -627,48 +737,85 @@ async function main(proxy) {
     
     await driver.sleep(3000);
     
-    // Buka halaman extension
-    console.log("-> Membuka halaman extension Gradient Network...");
-    await openExtensionPage(driver);
-    await driver.sleep(5000);
-    
-    // Ambil screenshot sebelum mencoba login
-    const beforeScreenshotPath = await takeScreenshot(driver, "extension-before-login.png");
-    if (SEND_SCREENSHOT_TO_TELEGRAM && beforeScreenshotPath) {
-      await sendToTelegram(beforeScreenshotPath, "🔍 Extension Gradient Network sebelum login");
-    }
-    
-    // Coba klik tombol login
-    console.log("-> Mencoba klik tombol login di extension...");
-    const loginSuccess = await clickLoginButton(driver);
-    
-    if (loginSuccess) {
-      console.log("-> Berhasil mengklik tombol login!");
-    } else {
-      console.log("-> Gagal mengklik tombol login, akan tetap melanjutkan proses...");
-    }
-    
-    await driver.sleep(5000);
-
-    console.log("-> Navigating to dashboard...");
-    await driver.get("https://app.gradient.network/dashboard");
+    // Login ke app.gradient.network terlebih dahulu
+    console.log("-> Navigating to app.gradient.network...");
+    await driver.get("https://app.gradient.network/");
     await driver.wait(until.elementLocated(By.css('body')), 30000);
-    console.log("-> Dashboard page is open.");
+    
+    // Cek apakah halaman login muncul
+    try {
+      const emailInput = By.css('[placeholder="Enter Email"]');
+      const passwordInput = By.css('[type="password"]');
+      const loginButton = By.css("button");
 
-    console.log("-> Opening extension in a new tab...");
+      await driver.wait(until.elementLocated(emailInput), 30000);
+      await driver.wait(until.elementLocated(passwordInput), 30000);
+      await driver.wait(until.elementLocated(loginButton), 30000);
+
+      await driver.findElement(emailInput).sendKeys(USER);
+      await driver.findElement(passwordInput).sendKeys(PASSWORD);
+      await driver.findElement(loginButton).click();
+      
+      console.log("-> Login form submitted successfully");
+      await driver.sleep(5000);
+    } catch (loginError) {
+      console.log("-> Could not find login form, checking if already logged in...");
+    }
+    
+    // Pastikan sudah login dengan mengakses halaman dashboard
+    console.log("-> Trying to access dashboard/setting directly...");
+    await driver.get("https://app.gradient.network/dashboard/setting");
+    await driver.wait(until.elementLocated(By.css('body')), 30000);
+    console.log("-> Logged in successfully!");
+    
+    // Ambil screenshot halaman dashboard dan kirim ke Telegram
+    const dashboardScreenshotPath = await takeScreenshot(driver, "dashboard.png");
+    if (SEND_SCREENSHOT_TO_TELEGRAM && dashboardScreenshotPath) {
+      await sendToTelegram(dashboardScreenshotPath, "🖥️ Berhasil login ke dashboard Gradient Network");
+    }
+    
+    // Buka extension di tab baru
+    console.log("-> Membuka extension di tab baru...");
     await driver.switchTo().newWindow('tab');
-    await openExtensionPage(driver);
-    await driver.sleep(5000); // Delay 5 detik setelah membuka extension
-    console.log("-> Extension is open in a new tab.");
-
+    const extensionUrl = `chrome-extension://${extensionId}/popup.html`;
+    await driver.get(extensionUrl);
+    await driver.sleep(5000);
+    
+    // Ambil screenshot extension sebelum klik tombol
+    const beforeClickScreenshotPath = await takeScreenshot(driver, "extension-before-click.png");
+    if (SEND_SCREENSHOT_TO_TELEGRAM && beforeClickScreenshotPath) {
+      await sendToTelegram(beforeClickScreenshotPath, "🔍 Extension Gradient Network sebelum klik tombol spesifik");
+    }
+    
+    // Klik tombol spesifik pada extension
+    console.log("-> Mencoba klik tombol spesifik pada extension...");
+    const buttonClickSuccess = await clickSpecificButton(driver);
+    
+    if (buttonClickSuccess) {
+      console.log("-> Berhasil mengklik tombol spesifik!");
+    } else {
+      console.log("-> Gagal mengklik tombol spesifik, akan tetap melanjutkan proses...");
+    }
+    
+    await driver.sleep(5000);
+    
+    // Buka kembali halaman extension dan refresh
+    console.log("-> Membuka kembali halaman extension dan refresh...");
+    await driver.get(extensionUrl);
+    await driver.sleep(3000);
+    await driver.navigate().refresh();
+    await driver.sleep(5000);
+    
+    // Ambil screenshot setelah refresh dan kirim ke Telegram
+    const afterRefreshScreenshotPath = await takeScreenshot(driver, "extension-after-refresh.png");
+    if (SEND_SCREENSHOT_TO_TELEGRAM && afterRefreshScreenshotPath) {
+      await sendToTelegram(afterRefreshScreenshotPath, "🔄 Extension Gradient Network setelah refresh");
+    }
+    
+    // Simpan handle untuk kedua tab
     const handles = await driver.getAllWindowHandles();
     const dashboardHandle = handles[0];
     const extensionHandle = handles[1];
-
-    // Ambil screenshot extension dan kirim ke Telegram jika diaktifkan
-    if (SEND_SCREENSHOT_TO_TELEGRAM) {
-      await captureAndSendExtensionScreenshot(driver);
-    }
 
     console.log("-> Bot is now running indefinitely with dashboard and extension tabs open.");
     console.log(`-> Screenshots akan dikirim setiap ${SCREENSHOT_INTERVAL_MINUTES} menit ke Telegram`);
@@ -686,13 +833,29 @@ async function main(proxy) {
         try {
           console.log("-> Refreshing pages to keep sessions alive...");
           
+          // Refresh dashboard
           await driver.switchTo().window(dashboardHandle);
           await driver.navigate().refresh();
-          await driver.sleep(5000); // Delay 5 detik setelah refresh
+          await driver.sleep(5000);
           
+          // Refresh extension, klik tombol spesifik, dan refresh lagi
           await driver.switchTo().window(extensionHandle);
           await driver.navigate().refresh();
-          await driver.sleep(5000); // Delay 5 detik setelah refresh
+          await driver.sleep(5000);
+          
+          // Coba klik tombol spesifik lagi
+          await clickSpecificButton(driver);
+          await driver.sleep(5000);
+          
+          // Refresh extension lagi
+          await driver.navigate().refresh();
+          await driver.sleep(5000);
+          
+          // Ambil screenshot dan kirim ke Telegram
+          const refreshScreenshotPath = await takeScreenshot(driver, "extension-periodic-refresh.png");
+          if (SEND_SCREENSHOT_TO_TELEGRAM && refreshScreenshotPath) {
+            await sendToTelegram(refreshScreenshotPath, "🔄 Extension Gradient Network setelah refresh periodik");
+          }
 
           console.log("-> Pages refreshed successfully.");
           lastRefreshTime = currentTime;
@@ -705,7 +868,16 @@ async function main(proxy) {
       if (SEND_SCREENSHOT_TO_TELEGRAM && currentTime - lastScreenshotTime > SCREENSHOT_INTERVAL_MINUTES * 60 * 1000) {
         try {
           console.log("-> Taking scheduled screenshot of extension...");
-          await captureAndSendExtensionScreenshot(driver);
+          
+          // Pastikan tab extension aktif
+          await driver.switchTo().window(extensionHandle);
+          
+          // Ambil screenshot dan kirim ke Telegram
+          const screenshotPath = await takeScreenshot(driver, `extension-${new Date().toISOString().replace(/:/g, '-')}.png`);
+          if (screenshotPath) {
+            await sendToTelegram(screenshotPath, `🤖 Gradient Extension Screenshot - ${new Date().toLocaleString()}`);
+          }
+          
           lastScreenshotTime = currentTime;
         } catch (screenshotError) {
           console.error("-> Failed to take scheduled screenshot:", screenshotError.message);
