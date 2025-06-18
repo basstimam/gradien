@@ -948,9 +948,6 @@ async function main(proxy) {
       await driver.findElement(By.xpath(loginButtonXPath)).click();
       console.log("-> Tombol login berhasil diklik");
       
-      // Tunggu 2 detik
-      await driver.sleep(2000);
-      
       // Tunggu redirect ke dashboard sebagai indikator login berhasil
       console.log("-> Menunggu redirect ke halaman dashboard...");
       try {
@@ -961,6 +958,10 @@ async function main(proxy) {
         }, 30000);
         
         console.log("-> Login berhasil! Terdeteksi redirect ke halaman dashboard");
+        
+        // Tunggu 10 detik setelah login berhasil sebelum mengambil screenshot
+        console.log("-> Menunggu 10 detik sebelum mengambil screenshot...");
+        await driver.sleep(10000);
         
         // Ambil screenshot setelah login
         const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app.png");
@@ -1003,9 +1004,6 @@ async function main(proxy) {
         
         console.log("-> Login form submitted successfully using alternative method");
         
-        // Tunggu 2 detik
-        await driver.sleep(2000);
-        
         // Tunggu redirect ke dashboard sebagai indikator login berhasil
         console.log("-> Menunggu redirect ke halaman dashboard (metode alternatif)...");
         try {
@@ -1016,6 +1014,10 @@ async function main(proxy) {
           }, 30000);
           
           console.log("-> Login berhasil! Terdeteksi redirect ke halaman dashboard");
+          
+          // Tunggu 10 detik setelah login berhasil sebelum mengambil screenshot
+          console.log("-> Menunggu 10 detik sebelum mengambil screenshot...");
+          await driver.sleep(10000);
           
           // Ambil screenshot setelah login
           const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app-alt.png");
@@ -1035,8 +1037,9 @@ async function main(proxy) {
     console.log("-> Memeriksa status login dengan mengakses dashboard langsung...");
     await driver.get("https://app.gradient.network/dashboard");
     
-    // Tunggu 2 detik
-    await driver.sleep(2000);
+    // Tunggu 10 detik setelah mengakses dashboard
+    console.log("-> Menunggu 10 detik sebelum memeriksa status login...");
+    await driver.sleep(10000);
     
     // Cek apakah berhasil mengakses dashboard
     try {
