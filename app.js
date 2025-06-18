@@ -951,10 +951,25 @@ async function main(proxy) {
       // Tunggu 2 detik
       await driver.sleep(2000);
       
-      // Ambil screenshot setelah login
-      const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app.png");
-      if (SEND_SCREENSHOT_TO_TELEGRAM && afterLoginScreenshotPath) {
-        await sendToTelegram(afterLoginScreenshotPath, "🔑 Login berhasil ke app.gradient.network");
+      // Tunggu redirect ke dashboard sebagai indikator login berhasil
+      console.log("-> Menunggu redirect ke halaman dashboard...");
+      try {
+        // Tunggu hingga URL berubah ke dashboard
+        await driver.wait(async () => {
+          const currentUrl = await driver.getCurrentUrl();
+          return currentUrl.includes("/dashboard");
+        }, 30000);
+        
+        console.log("-> Login berhasil! Terdeteksi redirect ke halaman dashboard");
+        
+        // Ambil screenshot setelah login
+        const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app.png");
+        if (SEND_SCREENSHOT_TO_TELEGRAM && afterLoginScreenshotPath) {
+          await sendToTelegram(afterLoginScreenshotPath, "✅ Login berhasil! Terdeteksi redirect ke halaman dashboard");
+        }
+      } catch (redirectError) {
+        console.log("-> Tidak terdeteksi redirect ke dashboard:", redirectError.message);
+        console.log("-> Akan mencoba memeriksa login dengan cara lain...");
       }
       
     } catch (loginError) {
@@ -990,28 +1005,69 @@ async function main(proxy) {
         
         // Tunggu 2 detik
         await driver.sleep(2000);
+        
+        // Tunggu redirect ke dashboard sebagai indikator login berhasil
+        console.log("-> Menunggu redirect ke halaman dashboard (metode alternatif)...");
+        try {
+          // Tunggu hingga URL berubah ke dashboard
+          await driver.wait(async () => {
+            const currentUrl = await driver.getCurrentUrl();
+            return currentUrl.includes("/dashboard");
+          }, 30000);
+          
+          console.log("-> Login berhasil! Terdeteksi redirect ke halaman dashboard");
+          
+          // Ambil screenshot setelah login
+          const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app-alt.png");
+          if (SEND_SCREENSHOT_TO_TELEGRAM && afterLoginScreenshotPath) {
+            await sendToTelegram(afterLoginScreenshotPath, "✅ Login berhasil! Terdeteksi redirect ke halaman dashboard (metode alternatif)");
+          }
+        } catch (redirectError) {
+          console.log("-> Tidak terdeteksi redirect ke dashboard:", redirectError.message);
+          console.log("-> Akan mencoba memeriksa login dengan cara lain...");
+        }
       } catch (altLoginError) {
         console.log("-> Could not find login form, checking if already logged in...");
       }
     }
     
-    // Pastikan sudah login dengan mengakses halaman dashboard
-    console.log("-> Trying to access dashboard/setting directly...");
-    await driver.get("https://app.gradient.network/dashboard/setting");
+    // Cek apakah sudah login dengan mencoba mengakses dashboard langsung
+    console.log("-> Memeriksa status login dengan mengakses dashboard langsung...");
+    await driver.get("https://app.gradient.network/dashboard");
     
     // Tunggu 2 detik
     await driver.sleep(2000);
     
-    await driver.wait(until.elementLocated(By.css('body')), 30000);
-    console.log("-> Logged in successfully!");
-    
-    // Tunggu 2 detik
-    await driver.sleep(2000);
-    
-    // Ambil screenshot halaman dashboard dan kirim ke Telegram
-    const dashboardScreenshotPath = await takeScreenshot(driver, "dashboard.png");
-    if (SEND_SCREENSHOT_TO_TELEGRAM && dashboardScreenshotPath) {
-      await sendToTelegram(dashboardScreenshotPath, "🖥️ Berhasil login ke dashboard Gradient Network");
+    // Cek apakah berhasil mengakses dashboard
+    try {
+      // Cek URL saat ini
+      const currentUrl = await driver.getCurrentUrl();
+      
+      if (currentUrl.includes("/dashboard")) {
+        console.log("-> Berhasil mengakses dashboard! Login berhasil");
+        
+        // Ambil screenshot dashboard
+        const dashboardScreenshotPath = await takeScreenshot(driver, "dashboard-confirmed.png");
+        if (SEND_SCREENSHOT_TO_TELEGRAM && dashboardScreenshotPath) {
+          await sendToTelegram(dashboardScreenshotPath, "✅ Konfirmasi login berhasil: Berhasil mengakses halaman dashboard");
+        }
+      } else if (currentUrl.includes("/login") || currentUrl.includes("/signin")) {
+        console.log("-> Gagal login! Masih di halaman login");
+        
+        // Ambil screenshot halaman login
+        const loginFailScreenshotPath = await takeScreenshot(driver, "login-failed.png");
+        if (SEND_SCREENSHOT_TO_TELEGRAM && loginFailScreenshotPath) {
+          await sendToTelegram(loginFailScreenshotPath, "❌ Login gagal: Masih di halaman login");
+        }
+        
+        // Coba login lagi atau lakukan tindakan lain
+        console.log("-> Mencoba login ulang...");
+        // Kode untuk login ulang bisa ditambahkan di sini
+      } else {
+        console.log("-> Status login tidak jelas. URL saat ini:", currentUrl);
+      }
+    } catch (checkError) {
+      console.error("-> Error saat memeriksa status login:", checkError.message);
     }
     
     // Tunggu 2 detik
