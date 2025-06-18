@@ -308,165 +308,39 @@ async function openExtensionPage(driver) {
   }
 }
 
-// Fungsi untuk mengklik tombol login di ekstensi
+// Update clickLoginButton untuk extension agar klik dengan XPath baru
 async function clickLoginButton(driver) {
   try {
-    console.log("-> Mencari tombol 'Log in' di extension...");
+    console.log("-> Mencoba klik tombol login pada extension dengan XPath baru...");
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
-    // Tunggu beberapa saat agar halaman dimuat dengan baik
-    await driver.sleep(5000);
-    
-    // Metode 1: Cari elemen yang mengandung teks "Log in" secara tepat
+    // XPath tombol login extension
+    const loginXPath = '/html/body/div/div/div/div/div[3]/div';
     try {
-      const loginElements = await driver.executeScript(`
-        return Array.from(document.querySelectorAll("*")).filter(el => 
-          el.textContent.trim() === "Log in" && 
-          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
-           el.onclick || el.parentElement.onclick)
-        );
-      `);
-      
-      console.log(`-> Ditemukan ${loginElements.length} elemen dengan teks 'Log in'`);
-      
-      if (loginElements && loginElements.length > 0) {
-        // Ambil screenshot sebelum klik
-        await takeScreenshot(driver, "before-login.png");
-        
-        // Klik elemen pertama yang ditemukan
-        await driver.executeScript("arguments[0].click();", loginElements[0]);
-        console.log("-> Tombol 'Log in' berhasil diklik!");
-        
-        // Tunggu sebentar dan ambil screenshot setelah klik
-        await driver.sleep(3000);
-        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
-        
-        // Kirim screenshot ke Telegram
-        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
-          await sendToTelegram(screenshotPath, "🔐 Tombol 'Log in' berhasil diklik pada extension Gradient Network");
-        }
-        
-        return true;
+      await driver.wait(until.elementLocated(By.xpath(loginXPath)), 10000);
+      const element = await driver.findElement(By.xpath(loginXPath));
+      // Ambil screenshot sebelum klik
+      await takeScreenshot(driver, "before-extension-login-click.png");
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      // Klik elemen
+      await driver.executeScript("arguments[0].click();", element);
+      console.log("-> Tombol login extension berhasil diklik dengan XPath baru!");
+      // Tunggu 2 detik dan ambil screenshot setelah klik
+      await driver.sleep(2000);
+      const screenshotPath = await takeScreenshot(driver, "after-extension-login-click.png");
+      if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
+        await sendToTelegram(screenshotPath, "🔐 Tombol login extension berhasil diklik (XPath baru)");
       }
+      return true;
     } catch (error) {
-      console.log(`-> Error saat mencari 'Log in' tepat: ${error.message}`);
+      console.log(`-> Tidak menemukan tombol login extension dengan XPath baru: ${error.message}`);
     }
-    
-    // Metode 2: Cari elemen yang mengandung teks "Log in" (case insensitive)
-    try {
-      const loginElements = await driver.executeScript(`
-        return Array.from(document.querySelectorAll("*")).filter(el => 
-          el.textContent.trim().toLowerCase() === "log in" && 
-          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
-           el.onclick || el.parentElement.onclick)
-        );
-      `);
-      
-      console.log(`-> Ditemukan ${loginElements.length} elemen dengan teks 'log in' (case insensitive)`);
-      
-      if (loginElements && loginElements.length > 0) {
-        // Ambil screenshot sebelum klik
-        await takeScreenshot(driver, "before-login.png");
-        
-        // Klik elemen pertama yang ditemukan
-        await driver.executeScript("arguments[0].click();", loginElements[0]);
-        console.log("-> Tombol 'log in' berhasil diklik!");
-        
-        // Tunggu sebentar dan ambil screenshot setelah klik
-        await driver.sleep(3000);
-        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
-        
-        // Kirim screenshot ke Telegram
-        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
-          await sendToTelegram(screenshotPath, "🔐 Tombol 'log in' berhasil diklik pada extension Gradient Network");
-        }
-        
-        return true;
-      }
-    } catch (error) {
-      console.log(`-> Error saat mencari 'log in' case insensitive: ${error.message}`);
-    }
-    
-    // Metode 3: Cari elemen yang mengandung teks "Log in" sebagai substring
-    try {
-      const loginElements = await driver.executeScript(`
-        return Array.from(document.querySelectorAll("*")).filter(el => 
-          el.textContent.includes("Log in") && 
-          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
-           el.onclick || el.parentElement.onclick)
-        );
-      `);
-      
-      console.log(`-> Ditemukan ${loginElements.length} elemen yang mengandung 'Log in' sebagai substring`);
-      
-      if (loginElements && loginElements.length > 0) {
-        // Ambil screenshot sebelum klik
-        await takeScreenshot(driver, "before-login.png");
-        
-        // Klik elemen pertama yang ditemukan
-        await driver.executeScript("arguments[0].click();", loginElements[0]);
-        console.log("-> Tombol yang mengandung 'Log in' berhasil diklik!");
-        
-        // Tunggu sebentar dan ambil screenshot setelah klik
-        await driver.sleep(3000);
-        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
-        
-        // Kirim screenshot ke Telegram
-        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
-          await sendToTelegram(screenshotPath, "🔐 Tombol yang mengandung 'Log in' berhasil diklik pada extension Gradient Network");
-        }
-        
-        return true;
-      }
-    } catch (error) {
-      console.log(`-> Error saat mencari substring 'Log in': ${error.message}`);
-    }
-    
-    // Metode 4: Cari tombol Login sebagai fallback
-    try {
-      console.log("-> Mencoba mencari tombol 'Login' sebagai alternatif...");
-      
-      const loginElements = await driver.executeScript(`
-        return Array.from(document.querySelectorAll("*")).filter(el => 
-          (el.textContent.includes("Login") || el.textContent.includes("login")) && 
-          (el.className.includes("cursor-pointer") || el.style.cursor === "pointer" || el.tagName === "BUTTON" || 
-           el.onclick || el.parentElement.onclick)
-        );
-      `);
-      
-      if (loginElements && loginElements.length > 0) {
-        // Ambil screenshot sebelum klik
-        await takeScreenshot(driver, "before-login.png");
-        
-        // Klik elemen pertama yang ditemukan
-        await driver.executeScript("arguments[0].click();", loginElements[0]);
-        console.log("-> Tombol 'Login' berhasil diklik sebagai alternatif!");
-        
-        // Tunggu sebentar dan ambil screenshot setelah klik
-        await driver.sleep(3000);
-        const screenshotPath = await takeScreenshot(driver, "after-login-click.png");
-        
-        // Kirim screenshot ke Telegram
-        if (SEND_SCREENSHOT_TO_TELEGRAM && screenshotPath) {
-          await sendToTelegram(screenshotPath, "🔐 Tombol 'Login' berhasil diklik pada extension Gradient Network");
-        }
-        
-        return true;
-      }
-    } catch (error) {
-      console.log(`-> Error saat mencari tombol 'Login' alternatif: ${error.message}`);
-    }
-    
-    // Jika semua metode di atas gagal, ambil screenshot kondisi saat ini dan kirim ke Telegram
-    console.log("-> Tidak dapat menemukan tombol login dengan semua metode.");
-    const failScreenshotPath = await takeScreenshot(driver, "login-button-not-found.png");
-    
-    if (SEND_SCREENSHOT_TO_TELEGRAM && failScreenshotPath) {
-      await sendToTelegram(failScreenshotPath, "⚠️ Tidak dapat menemukan tombol login pada extension Gradient Network");
-    }
-    
+    // Fallback: metode lama jika gagal
     return false;
   } catch (error) {
-    console.error(`-> Error dalam clickLoginButton: ${error.message}`);
+    console.error(`-> Error dalam clickLoginButton (extension): ${error.message}`);
     return false;
   }
 }
@@ -544,7 +418,7 @@ async function clickCloseButton(driver) {
     
     console.log("-> Tidak dapat menemukan tombol close.");
     return false;
-  } catch (error) {
+      } catch (error) {
     console.error(`-> Error dalam clickCloseButton: ${error.message}`);
     return false;
   }
@@ -948,6 +822,9 @@ async function main(proxy) {
       await driver.findElement(By.xpath(loginButtonXPath)).click();
       console.log("-> Tombol login berhasil diklik");
       
+      // Tunggu 2 detik
+      await driver.sleep(2000);
+      
       // Tunggu redirect ke dashboard sebagai indikator login berhasil
       console.log("-> Menunggu redirect ke halaman dashboard...");
       try {
@@ -958,10 +835,6 @@ async function main(proxy) {
         }, 30000);
         
         console.log("-> Login berhasil! Terdeteksi redirect ke halaman dashboard");
-        
-        // Tunggu 10 detik setelah login berhasil sebelum mengambil screenshot
-        console.log("-> Menunggu 10 detik sebelum mengambil screenshot...");
-        await driver.sleep(10000);
         
         // Ambil screenshot setelah login
         const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app.png");
@@ -1004,6 +877,9 @@ async function main(proxy) {
         
         console.log("-> Login form submitted successfully using alternative method");
         
+        // Tunggu 2 detik
+        await driver.sleep(2000);
+        
         // Tunggu redirect ke dashboard sebagai indikator login berhasil
         console.log("-> Menunggu redirect ke halaman dashboard (metode alternatif)...");
         try {
@@ -1014,10 +890,6 @@ async function main(proxy) {
           }, 30000);
           
           console.log("-> Login berhasil! Terdeteksi redirect ke halaman dashboard");
-          
-          // Tunggu 10 detik setelah login berhasil sebelum mengambil screenshot
-          console.log("-> Menunggu 10 detik sebelum mengambil screenshot...");
-          await driver.sleep(10000);
           
           // Ambil screenshot setelah login
           const afterLoginScreenshotPath = await takeScreenshot(driver, "after-login-app-alt.png");
@@ -1037,35 +909,27 @@ async function main(proxy) {
     console.log("-> Memeriksa status login dengan mengakses dashboard langsung...");
     await driver.get("https://app.gradient.network/dashboard");
     
-    // Tunggu 10 detik setelah mengakses dashboard
-    console.log("-> Menunggu 10 detik sebelum memeriksa status login...");
-    await driver.sleep(10000);
+    // Tunggu 2 detik
+    await driver.sleep(2000);
     
     // Cek apakah berhasil mengakses dashboard
     try {
-      // Cek URL saat ini
       const currentUrl = await driver.getCurrentUrl();
-      
       if (currentUrl.includes("/dashboard")) {
         console.log("-> Berhasil mengakses dashboard! Login berhasil");
-        
-        // Ambil screenshot dashboard
+        // Tunggu 10 detik sebelum screenshot dan kirim ke Telegram
+        await driver.sleep(10000);
         const dashboardScreenshotPath = await takeScreenshot(driver, "dashboard-confirmed.png");
         if (SEND_SCREENSHOT_TO_TELEGRAM && dashboardScreenshotPath) {
-          await sendToTelegram(dashboardScreenshotPath, "✅ Konfirmasi login berhasil: Berhasil mengakses halaman dashboard");
+          await sendToTelegram(dashboardScreenshotPath, "✅ Konfirmasi login berhasil: Berhasil mengakses halaman dashboard (delay 10 detik)");
         }
       } else if (currentUrl.includes("/login") || currentUrl.includes("/signin")) {
         console.log("-> Gagal login! Masih di halaman login");
-        
-        // Ambil screenshot halaman login
         const loginFailScreenshotPath = await takeScreenshot(driver, "login-failed.png");
         if (SEND_SCREENSHOT_TO_TELEGRAM && loginFailScreenshotPath) {
           await sendToTelegram(loginFailScreenshotPath, "❌ Login gagal: Masih di halaman login");
         }
-        
-        // Coba login lagi atau lakukan tindakan lain
         console.log("-> Mencoba login ulang...");
-        // Kode untuk login ulang bisa ditambahkan di sini
       } else {
         console.log("-> Status login tidak jelas. URL saat ini:", currentUrl);
       }
@@ -1106,21 +970,12 @@ async function main(proxy) {
     // Tunggu 2 detik
     await driver.sleep(2000);
     
-    // Coba klik tombol login pada extension
+    // Coba klik tombol login pada extension (XPath baru)
     console.log("-> Mencoba klik tombol login di extension...");
     const loginSuccess = await clickLoginButton(driver);
-    
     if (loginSuccess) {
       console.log("-> Berhasil mengklik tombol login di extension!");
-      
-      // Tunggu 2 detik
       await driver.sleep(2000);
-      
-      // Ambil screenshot setelah klik tombol login
-      const afterExtLoginScreenshotPath = await takeScreenshot(driver, "extension-after-login-click.png");
-      if (SEND_SCREENSHOT_TO_TELEGRAM && afterExtLoginScreenshotPath) {
-        await sendToTelegram(afterExtLoginScreenshotPath, "🔐 Tombol login berhasil diklik pada extension Gradient Network");
-      }
     } else {
       console.log("-> Gagal mengklik tombol login di extension, akan tetap melanjutkan proses...");
     }
@@ -1289,7 +1144,7 @@ async function main(proxy) {
     
     console.log("-> Attempting to keep the browser running despite the error...");
     try {
-      if (driver) {
+    if (driver) {
         while (true) {
           await driver.sleep(300000);
         }
